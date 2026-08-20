@@ -19,8 +19,18 @@
     0% { background-position: -200% center }
     100% { background-position: 200% center }
   }
-  html, body { overscroll-behavior: none; }
+  @keyframes barTop { from { transform: translateY(-100%) } to { transform: translateY(0) } }
+  @keyframes barBottom { from { transform: translateY(100%) } to { transform: translateY(0) } }
+  @keyframes hintFade { 0% { opacity: 0 } 12% { opacity: 1 } 72% { opacity: 1 } 100% { opacity: 0 } }
+  /* Runtime nie zeruje marginesu body w trybie podglądu — domyślne 8px
+     tworzyłoby poziomy overflow na scenie o szerokości 100vw. */
+  html, body { margin: 0; padding: 0; overscroll-behavior: none; }
   .om-touch-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  /* Mobile first: na niskich ekranach (telefon w poziomie) zagęszczamy układ. */
+  @media (max-height: 480px) {
+    .fx-screen { gap: 10px !important; }
+    .fx-screen .fx-tagline { display: none; }
+  }
   /* Uwaga wydajnościowa: żadnego backdrop-filter na elementach widocznych
      podczas gry — blur nad animowanym canvasem kosztuje kilka klatek/s. */
   .fx-panel {
@@ -43,57 +53,70 @@
 <script src="./spriteAnimator.js"></script>
 <script src="./effects.js"></script>
 </helmet>
-<div style="position:relative;width:100vw;height:100vh;overflow:hidden;background:#1a1410;font-family:'Trebuchet MS',sans-serif;user-select:none;touch-action:none" tabIndex="0" ref="{{ stageRef }}" onTouchStart="{{ onStageTouchStart }}" onTouchMove="{{ onStageTouchMove }}" onTouchEnd="{{ onStageTouchEnd }}">
+<div style="position:relative;width:100vw;height:100vh;overflow:hidden;background:#1a1410;font-family:'Trebuchet MS',sans-serif;user-select:none;touch-action:none" tabIndex="0" ref="{{ stageRef }}" onClick="{{ onStageClick }}" onTouchStart="{{ onStageTouchStart }}" onTouchMove="{{ onStageTouchMove }}" onTouchEnd="{{ onStageTouchEnd }}">
   <canvas ref="{{ canvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block;animation:fadeIn 0.6s ease"></canvas>
 
-  <div class="fx-panel" style="position:absolute;top:16px;left:16px;display:flex;gap:8px;padding:10px 14px">
-    <sc-for list="{{ hearts }}" as="h" hint-placeholder-count="3">
-      <div class="fx-heart" style="font-size:26px;filter:{{ h.filter }};opacity:{{ h.opacity }};transform:scale({{ h.scale }})">❤️</div>
-    </sc-for>
-  </div>
+  <sc-if value="{{ hudVisible }}">
+    <div class="fx-panel" style="position:absolute;top:calc(12px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));display:flex;gap:clamp(5px,1.5vw,8px);padding:clamp(6px,1.6vw,10px) clamp(9px,2vw,14px)">
+      <sc-for list="{{ hearts }}" as="h" hint-placeholder-count="3">
+        <div class="fx-heart" style="font-size:clamp(19px,5vw,26px);filter:{{ h.filter }};opacity:{{ h.opacity }};transform:scale({{ h.scale }})">❤️</div>
+      </sc-for>
+    </div>
 
-  <div class="fx-panel" style="position:absolute;top:16px;right:16px;text-align:right;color:#fff2dc;padding:8px 16px 10px;min-width:130px">
-    <div style="font-size:27px;font-weight:800;letter-spacing:0.02em;text-shadow:0 2px 6px rgba(0,0,0,0.7);line-height:1.15">{{ scoreLabel }}</div>
-    <div style="font-size:12px;opacity:0.75;letter-spacing:0.08em;text-transform:uppercase">Dystans {{ distanceLabel }} m</div>
-    <sc-if value="{{ comboLabel }}">
-      <div style="font-size:14px;font-weight:800;color:#ffc247;text-shadow:0 0 12px rgba(255,180,60,0.8);animation:pulse 0.5s ease infinite">{{ comboLabel }}</div>
-    </sc-if>
-  </div>
-
-  <sc-if value="{{ isReady }}">
-    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%, rgba(24,16,8,0.45), rgba(8,5,3,0.82));gap:22px;color:#fff2dc;text-align:center;animation:fadeIn 0.5s ease">
-      <div style="font-size:15px;letter-spacing:0.35em;text-transform:uppercase;opacity:0.7;animation:slideUp 0.6s ease both">Przygoda w lesie cieni</div>
-      <div class="fx-title" style="font-size:56px;font-weight:800;letter-spacing:0.01em;animation:slideUp 0.6s 0.08s ease both;line-height:1.1">Leśny Ninja: Bieg</div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;animation:slideUp 0.6s 0.16s ease both">
-        <div class="fx-panel" style="padding:10px 18px;font-size:14px">⬅️ ➡️ &nbsp;Strzałki / A-D — ruch</div>
-        <div class="fx-panel" style="padding:10px 18px;font-size:14px">⬆️ &nbsp;Spacja / W — skok</div>
-        <div class="fx-panel" style="padding:10px 18px;font-size:14px">📱 &nbsp;Machnięcie w górę — skok</div>
-      </div>
-      <div style="font-size:15px;opacity:0.85;max-width:460px;line-height:1.55;animation:slideUp 0.6s 0.24s ease both">Wskocz wrogowi na głowę, aby go pokonać — kolejne trafienia budują <b style="color:#ffc247">serię</b> i mnożą punkty. Zderzenie z boku kosztuje życie!</div>
-      <button onClick="{{ startGame }}" class="om-touch-btn" style="padding:16px 52px;font-size:19px;font-weight:800;letter-spacing:0.04em;border:none;border-radius:12px;background:linear-gradient(180deg,#ffca5f,#e8a12d);color:#2b1c0e;cursor:pointer;box-shadow:0 6px 24px rgba(232,161,45,0.45), inset 0 1px 0 rgba(255,255,255,0.5);animation:popIn 0.5s 0.32s ease both, floatY 2.6s 1s ease-in-out infinite" style-hover="transform:scale(1.06);box-shadow:0 8px 32px rgba(232,161,45,0.65), inset 0 1px 0 rgba(255,255,255,0.5)">▶ &nbsp;Start</button>
+    <div class="fx-panel" style="position:absolute;top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));text-align:right;color:#fff2dc;padding:clamp(5px,1.4vw,8px) clamp(10px,2.2vw,16px) clamp(6px,1.6vw,10px);min-width:clamp(96px,24vw,130px)">
+      <div style="font-size:clamp(20px,5.2vw,27px);font-weight:800;letter-spacing:0.02em;text-shadow:0 2px 6px rgba(0,0,0,0.7);line-height:1.15">{{ scoreLabel }}</div>
+      <div style="font-size:clamp(10px,2.6vw,12px);opacity:0.75;letter-spacing:0.08em;text-transform:uppercase">Dystans {{ distanceLabel }} m</div>
+      <sc-if value="{{ comboLabel }}">
+        <div style="font-size:clamp(12px,3vw,14px);font-weight:800;color:#ffc247;text-shadow:0 0 12px rgba(255,180,60,0.8);animation:pulse 0.5s ease infinite">{{ comboLabel }}</div>
+      </sc-if>
     </div>
   </sc-if>
 
-  <sc-if value="{{ isGameOver }}">
-    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 45%, rgba(30,10,8,0.5), rgba(8,4,3,0.85));gap:18px;color:#fff2dc;text-align:center;animation:fadeIn 0.7s ease">
-      <div class="fx-title" style="font-size:46px;font-weight:800;animation:slideUp 0.6s ease both">Koniec gry</div>
-      <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;animation:slideUp 0.6s 0.1s ease both">
-        <div class="fx-panel" style="padding:14px 26px;min-width:110px">
-          <div style="font-size:30px;font-weight:800;color:#ffc247">{{ scoreLabel }}</div>
-          <div style="font-size:12px;opacity:0.7;text-transform:uppercase;letter-spacing:0.08em">Wynik</div>
+  <sc-if value="{{ isReady }}">
+    <div class="fx-screen" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%, rgba(24,16,8,0.45), rgba(8,5,3,0.82));gap:clamp(12px,3vmin,22px);color:#fff2dc;text-align:center;animation:fadeIn 0.5s ease;padding:16px;box-sizing:border-box">
+      <div class="fx-tagline" style="font-size:clamp(11px,2.6vmin,15px);letter-spacing:0.35em;text-transform:uppercase;opacity:0.7;animation:slideUp 0.6s ease both">Przygoda w lesie cieni</div>
+      <div class="fx-title" style="font-size:clamp(30px,9vmin,56px);font-weight:800;letter-spacing:0.01em;animation:slideUp 0.6s 0.08s ease both;line-height:1.1">Leśny Ninja: Bieg</div>
+      <div style="display:flex;gap:clamp(8px,2vmin,12px);flex-wrap:wrap;justify-content:center;animation:slideUp 0.6s 0.16s ease both;max-width:92vw">
+        <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">📱 &nbsp;Dotknij połowy ekranu — bieg</div>
+        <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">👆 &nbsp;Machnięcie w górę — skok</div>
+        <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">⌨️ &nbsp;Strzałki / A-D + spacja</div>
+      </div>
+      <div style="font-size:clamp(13px,3.2vmin,15px);opacity:0.85;max-width:min(460px,88vw);line-height:1.55;animation:slideUp 0.6s 0.24s ease both">Wskocz wrogowi na głowę, aby go pokonać — kolejne trafienia budują <b style="color:#ffc247">serię</b> i mnożą punkty. Zderzenie z boku kosztuje życie!</div>
+      <button onClick="{{ startGame }}" class="om-touch-btn" style="min-height:52px;padding:clamp(12px,3vmin,16px) clamp(30px,9vmin,52px);font-size:clamp(16px,4.2vmin,19px);font-weight:800;letter-spacing:0.04em;border:none;border-radius:12px;background:linear-gradient(180deg,#ffca5f,#e8a12d);color:#2b1c0e;cursor:pointer;box-shadow:0 6px 24px rgba(232,161,45,0.45), inset 0 1px 0 rgba(255,255,255,0.5);animation:popIn 0.5s 0.32s ease both, floatY 2.6s 1s ease-in-out infinite" style-hover="transform:scale(1.06);box-shadow:0 8px 32px rgba(232,161,45,0.65), inset 0 1px 0 rgba(255,255,255,0.5)">▶ &nbsp;Start</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ gameOverVisible }}">
+    <div class="fx-screen" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 45%, rgba(30,10,8,0.5), rgba(8,4,3,0.85));gap:clamp(10px,2.6vmin,18px);color:#fff2dc;text-align:center;animation:fadeIn 0.7s ease;padding:16px;box-sizing:border-box">
+      <div class="fx-title" style="font-size:clamp(28px,8vmin,46px);font-weight:800;animation:slideUp 0.6s ease both">Koniec gry</div>
+      <div style="display:flex;gap:clamp(8px,2.2vmin,14px);flex-wrap:wrap;justify-content:center;animation:slideUp 0.6s 0.1s ease both;max-width:92vw">
+        <div class="fx-panel" style="padding:clamp(9px,2.2vmin,14px) clamp(14px,4vmin,26px);min-width:clamp(84px,22vmin,110px)">
+          <div style="font-size:clamp(22px,6vmin,30px);font-weight:800;color:#ffc247">{{ scoreLabel }}</div>
+          <div style="font-size:clamp(10px,2.6vmin,12px);opacity:0.7;text-transform:uppercase;letter-spacing:0.08em">Wynik</div>
         </div>
-        <div class="fx-panel" style="padding:14px 26px;min-width:110px">
-          <div style="font-size:30px;font-weight:800">{{ kills }}</div>
-          <div style="font-size:12px;opacity:0.7;text-transform:uppercase;letter-spacing:0.08em">Wrogowie</div>
+        <div class="fx-panel" style="padding:clamp(9px,2.2vmin,14px) clamp(14px,4vmin,26px);min-width:clamp(84px,22vmin,110px)">
+          <div style="font-size:clamp(22px,6vmin,30px);font-weight:800">{{ kills }}</div>
+          <div style="font-size:clamp(10px,2.6vmin,12px);opacity:0.7;text-transform:uppercase;letter-spacing:0.08em">Wrogowie</div>
         </div>
-        <div class="fx-panel" style="padding:14px 26px;min-width:110px">
-          <div style="font-size:30px;font-weight:800">{{ distanceLabel }} m</div>
-          <div style="font-size:12px;opacity:0.7;text-transform:uppercase;letter-spacing:0.08em">Dystans</div>
+        <div class="fx-panel" style="padding:clamp(9px,2.2vmin,14px) clamp(14px,4vmin,26px);min-width:clamp(84px,22vmin,110px)">
+          <div style="font-size:clamp(22px,6vmin,30px);font-weight:800">{{ distanceLabel }} m</div>
+          <div style="font-size:clamp(10px,2.6vmin,12px);opacity:0.7;text-transform:uppercase;letter-spacing:0.08em">Dystans</div>
         </div>
       </div>
-      <div style="font-size:15px;opacity:0.75;animation:slideUp 0.6s 0.18s ease both">Najlepsza seria: <b style="color:#ffc247">x{{ bestCombo }}</b></div>
-      <button onClick="{{ startGame }}" class="om-touch-btn" style="padding:16px 46px;font-size:18px;font-weight:800;letter-spacing:0.04em;border:none;border-radius:12px;background:linear-gradient(180deg,#ffca5f,#e8a12d);color:#2b1c0e;cursor:pointer;box-shadow:0 6px 24px rgba(232,161,45,0.45), inset 0 1px 0 rgba(255,255,255,0.5);animation:popIn 0.5s 0.26s ease both" style-hover="transform:scale(1.06);box-shadow:0 8px 32px rgba(232,161,45,0.65), inset 0 1px 0 rgba(255,255,255,0.5)">↻ &nbsp;Zagraj ponownie</button>
+      <div class="fx-tagline" style="font-size:clamp(13px,3.2vmin,15px);opacity:0.75;animation:slideUp 0.6s 0.18s ease both">Najlepsza seria: <b style="color:#ffc247">x{{ bestCombo }}</b></div>
+      <button onClick="{{ startGame }}" class="om-touch-btn" style="min-height:52px;padding:clamp(12px,3vmin,16px) clamp(26px,8vmin,46px);font-size:clamp(15px,4vmin,18px);font-weight:800;letter-spacing:0.04em;border:none;border-radius:12px;background:linear-gradient(180deg,#ffca5f,#e8a12d);color:#2b1c0e;cursor:pointer;box-shadow:0 6px 24px rgba(232,161,45,0.45), inset 0 1px 0 rgba(255,255,255,0.5);animation:popIn 0.5s 0.26s ease both" style-hover="transform:scale(1.06);box-shadow:0 8px 32px rgba(232,161,45,0.65), inset 0 1px 0 rgba(255,255,255,0.5)">↻ &nbsp;Zagraj ponownie</button>
     </div>
+  </sc-if>
+
+  <sc-if value="{{ photoBtnVisible }}">
+    <button class="om-touch-btn" onClick="{{ onPhotoClick }}" onTouchStart="{{ onPhotoTouchStart }}" onTouchEnd="{{ onPhotoTouchEnd }}" title="Tryb foto (P)" style="position:absolute;right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;border:1px solid rgba(255,226,170,0.25);background:rgba(16,10,6,0.55);color:#fff2dc;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,0.4)" style-hover="background:rgba(40,26,12,0.7);transform:scale(1.08)">📷</button>
+  </sc-if>
+
+  <sc-if value="{{ isPhoto }}">
+    <div style="position:absolute;top:0;left:0;right:0;height:clamp(24px,6vh,60px);background:#000;animation:barTop 0.45s ease both;pointer-events:none"></div>
+    <div style="position:absolute;bottom:0;left:0;right:0;height:clamp(24px,6vh,60px);background:#000;animation:barBottom 0.45s ease both;pointer-events:none"></div>
+    <div style="position:absolute;left:0;right:0;bottom:calc(clamp(24px,6vh,60px) + 14px);text-align:center;color:#fff2dc;font-size:clamp(12px,3vw,14px);letter-spacing:0.06em;text-shadow:0 2px 6px rgba(0,0,0,0.8);animation:hintFade 3.2s ease both;pointer-events:none">Dotknij ekranu lub naciśnij P, aby wrócić do gry</div>
+    <div style="position:absolute;left:calc(14px + env(safe-area-inset-left));top:calc(clamp(24px,6vh,60px) + 12px);color:#fff2dc;opacity:0.55;font-size:clamp(11px,2.8vw,13px);font-weight:700;letter-spacing:0.08em;text-shadow:0 2px 6px rgba(0,0,0,0.8);pointer-events:none">🥷 LEŚNY NINJA: BIEG</div>
   </sc-if>
 
 </div>
@@ -104,7 +127,7 @@ class Component extends DCLogic {
     super(props);
     this.canvasRef = React.createRef();
     this.stageRef = React.createRef();
-    this.state = { gameState: 'ready', lives: 3, score: 0, distance: 0, kills: 0, combo: 0, bestCombo: 1 };
+    this.state = { gameState: 'ready', lives: 3, score: 0, distance: 0, kills: 0, combo: 0, bestCombo: 1, photoMode: false };
     this.layers = [];
     this.enemies = [];
     this.keys = { left: false, right: false };
@@ -129,6 +152,8 @@ class Component extends DCLogic {
   handleResize = () => this.resizeCanvas();
 
   handleKeyDown = (e) => {
+    if (['p', 'P'].includes(e.key)) { this.togglePhotoMode(); return; }
+    if (this.state.photoMode) return;
     if (['ArrowLeft', 'a', 'A'].includes(e.key)) this.keys.left = true;
     if (['ArrowRight', 'd', 'D'].includes(e.key)) this.keys.right = true;
     if (['ArrowUp', 'w', 'W', ' '].includes(e.key)) { e.preventDefault(); this.tryJump(); }
@@ -207,11 +232,48 @@ class Component extends DCLogic {
     this.layers.forEach(l => l.scrollX = 0);
     if (this.animator) this.animator.reset('idle');
     if (this.fx) this.fx.reset();
-    this.setState({ gameState: 'playing', lives: 3, score: 0, distance: 0, kills: 0, combo: 0, bestCombo: 1 });
+    this.setState({ gameState: 'playing', lives: 3, score: 0, distance: 0, kills: 0, combo: 0, bestCombo: 1, photoMode: false });
+  };
+
+  // Tryb foto: pauzuje świat gry i chowa HUD — czysty kadr do zrzutów
+  // i nagrań. Wejście: przycisk 📷 lub klawisz P; wyjście: dotknięcie
+  // ekranu, kliknięcie albo ponowne P.
+  togglePhotoMode = () => {
+    const s = this.state.gameState;
+    if (s !== 'playing' && s !== 'gameover') return;
+    this.keys.left = false;
+    this.keys.right = false;
+    this.setState(st => ({ photoMode: !st.photoMode }));
+  };
+
+  // stopPropagation: dotknięcie przycisku 📷 nie może uruchomić biegu
+  // (rodzic-scena nasłuchuje dotyku całych połówek ekranu). Przełącza
+  // touchend; emulowany click, który przeglądarka wysyła po dotyku,
+  // jest deduplikowany po czasie — bez preventDefault, bo listenery
+  // dotykowe Reacta są pasywne.
+  onPhotoClick = (e) => {
+    e.stopPropagation();
+    if (performance.now() - (this.photoTouchAt || 0) < 700) return;
+    this.togglePhotoMode();
+  };
+  onPhotoTouchStart = (e) => { e.stopPropagation(); };
+  onPhotoTouchEnd = (e) => {
+    e.stopPropagation();
+    if (e.cancelable) e.preventDefault(); // blokuje emulowany click po dotyku
+    this.photoTouchAt = performance.now();
+    this.togglePhotoMode();
+  };
+
+  onStageClick = () => {
+    if (!this.state.photoMode) return;
+    // Emulowany click po tapnięciu 📷 trafiłby w scenę (przycisk już zniknął)
+    // i od razu wyszedłby z trybu foto — ignorujemy go w krótkim oknie.
+    if (performance.now() - (this.photoTouchAt || 0) < 700) return;
+    this.togglePhotoMode();
   };
 
   tryJump() {
-    if (this.state.gameState !== 'playing' || !this.player) return;
+    if (this.state.gameState !== 'playing' || !this.player || this.state.photoMode) return;
     if (this.player.onGround) {
       const p = this.player;
       p.vy = -900;
@@ -231,6 +293,7 @@ class Component extends DCLogic {
   onJump = (e) => { if (e.cancelable) e.preventDefault(); this.tryJump(); };
 
   onStageTouchStart = (e) => {
+    if (this.state.photoMode) return;
     const t = e.touches[0];
     this.swipe = { x: t.clientX, y: t.clientY, t: performance.now(), moved: false };
     // hold on left/right half of screen to run that direction, same gesture area as swipe-up jump
@@ -243,6 +306,9 @@ class Component extends DCLogic {
     if (Math.abs(t.clientY - this.swipe.y) > 10 || Math.abs(t.clientX - this.swipe.x) > 10) this.swipe.moved = true;
   };
   onStageTouchEnd = (e) => {
+    // W trybie foto dotknięcie ekranu wraca do gry (klik na iOS/Android
+    // bywa pomijany nad canvasem, więc reagujemy wprost na touchend).
+    if (this.state.photoMode) { this.swipe = null; this.togglePhotoMode(); return; }
     this.keys.left = false;
     this.keys.right = false;
     if (!this.swipe) return;
@@ -361,12 +427,16 @@ class Component extends DCLogic {
     const rawDt = Math.min((now - this.lastTime) / 1000, 0.05);
     this.lastTime = now;
     // FX skaluje czas świata (hit-stop / slow-motion) i liczy shake kamery.
-    const dt = this.fx.tick(rawDt);
+    // Tryb foto zamraża świat całkowicie (dt = 0) — pętla dalej rysuje ten
+    // sam kadr, a ambient (promienie, świetliki) subtelnie żyje na zegarze fx.
+    const photo = this.state.photoMode;
+    const worldDt = this.fx.tick(rawDt);
+    const dt = photo ? 0 : worldDt;
     const groundY = this.computeGroundY(w, h, this.player ? this.player.x : undefined);
     const playing = this.state.gameState === 'playing';
     const gameOver = this.state.gameState === 'gameover';
 
-    if (playing && this.player) {
+    if (playing && !photo && this.player) {
       this.elapsedPlaying += dt;
       this.gameSpeed = Math.min(260 + this.elapsedPlaying * 6, 620);
       const spawnInterval = Math.max(1.5 - this.elapsedPlaying * 0.02, 0.55);
@@ -649,6 +719,10 @@ class Component extends DCLogic {
       isReady: s.gameState === 'ready',
       isPlaying: s.gameState === 'playing',
       isGameOver: s.gameState === 'gameover',
+      isPhoto: s.photoMode,
+      hudVisible: !s.photoMode && s.gameState !== 'ready',
+      gameOverVisible: s.gameState === 'gameover' && !s.photoMode,
+      photoBtnVisible: (s.gameState === 'playing' || s.gameState === 'gameover') && !s.photoMode,
       scoreLabel: Math.floor(s.score).toString(),
       distanceLabel: Math.floor(s.distance).toString(),
       kills: s.kills,
@@ -658,6 +732,10 @@ class Component extends DCLogic {
       onLeftDown: this.onLeftDown, onLeftUp: this.onLeftUp,
       onRightDown: this.onRightDown, onRightUp: this.onRightUp,
       onJump: this.onJump,
+      onPhotoClick: this.onPhotoClick,
+      onPhotoTouchStart: this.onPhotoTouchStart,
+      onPhotoTouchEnd: this.onPhotoTouchEnd,
+      onStageClick: this.onStageClick,
       onStageTouchStart: this.onStageTouchStart,
       onStageTouchMove: this.onStageTouchMove,
       onStageTouchEnd: this.onStageTouchEnd,
