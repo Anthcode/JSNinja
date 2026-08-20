@@ -8,43 +8,115 @@
 <body>
 <x-dc>
 <helmet>
+<title>Leśny Ninja: Bieg</title>
 <style>
   @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
   @keyframes pulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.15) } }
-  html, body { overscroll-behavior: none; }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(26px) } to { opacity: 1; transform: translateY(0) } }
+  @keyframes popIn { 0% { opacity: 0; transform: scale(0.7) } 70% { transform: scale(1.06) } 100% { opacity: 1; transform: scale(1) } }
+  @keyframes floatY { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
+  @keyframes titleShine {
+    0% { background-position: -200% center }
+    100% { background-position: 200% center }
+  }
+  @keyframes barTop { from { transform: translateY(-100%) } to { transform: translateY(0) } }
+  @keyframes barBottom { from { transform: translateY(100%) } to { transform: translateY(0) } }
+  @keyframes hintFade { 0% { opacity: 0 } 12% { opacity: 1 } 72% { opacity: 1 } 100% { opacity: 0 } }
+  /* Runtime nie zeruje marginesu body w trybie podglądu — domyślne 8px
+     tworzyłoby poziomy overflow na scenie o szerokości 100vw. */
+  html, body { margin: 0; padding: 0; overscroll-behavior: none; }
   .om-touch-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  /* Mobile first: na niskich ekranach (telefon w poziomie) zagęszczamy układ. */
+  @media (max-height: 480px) {
+    .fx-screen { gap: 10px !important; }
+    .fx-screen .fx-tagline { display: none; }
+  }
+  /* Uwaga wydajnościowa: żadnego backdrop-filter na elementach widocznych
+     podczas gry — blur nad animowanym canvasem kosztuje kilka klatek/s. */
+  .fx-panel {
+    background: rgba(16, 10, 6, 0.55);
+    border: 1px solid rgba(255, 226, 170, 0.18);
+    border-radius: 14px;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.35);
+  }
+  .fx-title {
+    background: linear-gradient(100deg, #ffe9b0 20%, #ffb84d 40%, #fff6dd 50%, #ffb84d 60%, #ffe9b0 80%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: titleShine 4s linear infinite;
+    filter: drop-shadow(0 4px 14px rgba(0,0,0,0.75));
+  }
+  .fx-heart { transition: opacity 0.35s ease, filter 0.35s ease, transform 0.35s ease; }
 </style>
 <script src="./spriteAnimator.js"></script>
+<script src="./effects.js"></script>
 </helmet>
-<div style="position:relative;width:100vw;height:100vh;overflow:hidden;background:#1a1410;font-family:'Trebuchet MS',sans-serif;user-select:none;touch-action:none" tabIndex="0" ref="{{ stageRef }}" onTouchStart="{{ onStageTouchStart }}" onTouchMove="{{ onStageTouchMove }}" onTouchEnd="{{ onStageTouchEnd }}">
+<div style="position:relative;width:100vw;height:100vh;overflow:hidden;background:#1a1410;font-family:'Trebuchet MS',sans-serif;user-select:none;touch-action:none" tabIndex="0" ref="{{ stageRef }}" onClick="{{ onStageClick }}" onTouchStart="{{ onStageTouchStart }}" onTouchMove="{{ onStageTouchMove }}" onTouchEnd="{{ onStageTouchEnd }}">
   <canvas ref="{{ canvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block;animation:fadeIn 0.6s ease"></canvas>
 
-  <div style="position:absolute;top:18px;left:18px;display:flex;gap:8px">
-    <sc-for list="{{ hearts }}" as="h" hint-placeholder-count="3">
-      <div style="font-size:28px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.6));opacity:{{ h.opacity }}">{{ h.icon }}</div>
-    </sc-for>
-  </div>
+  <sc-if value="{{ hudVisible }}">
+    <div class="fx-panel" style="position:absolute;top:calc(12px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));display:flex;gap:clamp(5px,1.5vw,8px);padding:clamp(6px,1.6vw,10px) clamp(9px,2vw,14px)">
+      <sc-for list="{{ hearts }}" as="h" hint-placeholder-count="3">
+        <div class="fx-heart" style="font-size:clamp(19px,5vw,26px);filter:{{ h.filter }};opacity:{{ h.opacity }};transform:scale({{ h.scale }})">❤️</div>
+      </sc-for>
+    </div>
 
-  <div style="position:absolute;top:18px;right:18px;text-align:right;color:#fff2dc;text-shadow:0 2px 4px rgba(0,0,0,0.7)">
-    <div style="font-size:26px;font-weight:700;letter-spacing:0.02em">{{ scoreLabel }}</div>
-    <div style="font-size:13px;opacity:0.75;letter-spacing:0.05em;text-transform:uppercase">Dystans {{ distanceLabel }} m</div>
-  </div>
-
-  <sc-if value="{{ isReady }}">
-    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,8,6,0.55);gap:18px;color:#fff2dc;text-align:center">
-      <div style="font-size:44px;font-weight:800;text-shadow:0 3px 10px rgba(0,0,0,0.8)">Leśny Ninja: Bieg</div>
-      <div style="font-size:16px;opacity:0.85;max-width:420px;line-height:1.5">Strzałki / A-D — ruch lewo-prawo &nbsp;•&nbsp; Spacja / W / góra — skok na wroga<br/>Wskocz wrogowi na głowę, by go pokonać. Zderzenie z boku kosztuje życie.</div>
-      <button onClick="{{ startGame }}" style="padding:14px 36px;font-size:18px;font-weight:700;border:none;border-radius:8px;background:#e8b23d;color:#2b1c0e;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,0.4)">Start</button>
+    <div class="fx-panel" style="position:absolute;top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));text-align:right;color:#fff2dc;padding:clamp(5px,1.4vw,8px) clamp(10px,2.2vw,16px) clamp(6px,1.6vw,10px);min-width:clamp(96px,24vw,130px)">
+      <div style="font-size:clamp(20px,5.2vw,27px);font-weight:800;letter-spacing:0.02em;text-shadow:0 2px 6px rgba(0,0,0,0.7);line-height:1.15">{{ scoreLabel }}</div>
+      <div style="font-size:clamp(10px,2.6vw,12px);opacity:0.75;letter-spacing:0.08em;text-transform:uppercase">Dystans {{ distanceLabel }} m</div>
+      <sc-if value="{{ comboLabel }}">
+        <div style="font-size:clamp(12px,3vw,14px);font-weight:800;color:#ffc247;text-shadow:0 0 12px rgba(255,180,60,0.8);animation:pulse 0.5s ease infinite">{{ comboLabel }}</div>
+      </sc-if>
     </div>
   </sc-if>
 
-  <sc-if value="{{ isGameOver }}">
-    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,8,6,0.65);gap:14px;color:#fff2dc;text-align:center">
-      <div style="font-size:38px;font-weight:800;text-shadow:0 3px 10px rgba(0,0,0,0.8)">Koniec gry</div>
-      <div style="font-size:20px">Wynik: {{ scoreLabel }}</div>
-      <div style="font-size:14px;opacity:0.8">Pokonani wrogowie: {{ kills }} &nbsp;•&nbsp; Dystans: {{ distanceLabel }} m</div>
-      <button onClick="{{ startGame }}" style="padding:14px 36px;font-size:18px;font-weight:700;border:none;border-radius:8px;background:#e8b23d;color:#2b1c0e;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,0.4)">Zagraj ponownie</button>
+  <sc-if value="{{ isReady }}">
+    <div class="fx-screen" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%, rgba(24,16,8,0.45), rgba(8,5,3,0.82));gap:clamp(12px,3vmin,22px);color:#fff2dc;text-align:center;animation:fadeIn 0.5s ease;padding:16px;box-sizing:border-box">
+      <div class="fx-tagline" style="font-size:clamp(11px,2.6vmin,15px);letter-spacing:0.35em;text-transform:uppercase;opacity:0.7;animation:slideUp 0.6s ease both">Przygoda w lesie cieni</div>
+      <div class="fx-title" style="font-size:clamp(30px,9vmin,56px);font-weight:800;letter-spacing:0.01em;animation:slideUp 0.6s 0.08s ease both;line-height:1.1">Leśny Ninja: Bieg</div>
+      <div style="display:flex;gap:clamp(8px,2vmin,12px);flex-wrap:wrap;justify-content:center;animation:slideUp 0.6s 0.16s ease both;max-width:92vw">
+        <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">📱 &nbsp;Dotknij połowy ekranu — bieg</div>
+        <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">👆 &nbsp;Machnięcie w górę — skok</div>
+        <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">⌨️ &nbsp;Strzałki / A-D + spacja</div>
+      </div>
+      <div style="font-size:clamp(13px,3.2vmin,15px);opacity:0.85;max-width:min(460px,88vw);line-height:1.55;animation:slideUp 0.6s 0.24s ease both">Wskocz wrogowi na głowę, aby go pokonać — kolejne trafienia budują <b style="color:#ffc247">serię</b> i mnożą punkty. Zderzenie z boku kosztuje życie!</div>
+      <button onClick="{{ startGame }}" class="om-touch-btn" style="min-height:52px;padding:clamp(12px,3vmin,16px) clamp(30px,9vmin,52px);font-size:clamp(16px,4.2vmin,19px);font-weight:800;letter-spacing:0.04em;border:none;border-radius:12px;background:linear-gradient(180deg,#ffca5f,#e8a12d);color:#2b1c0e;cursor:pointer;box-shadow:0 6px 24px rgba(232,161,45,0.45), inset 0 1px 0 rgba(255,255,255,0.5);animation:popIn 0.5s 0.32s ease both, floatY 2.6s 1s ease-in-out infinite" style-hover="transform:scale(1.06);box-shadow:0 8px 32px rgba(232,161,45,0.65), inset 0 1px 0 rgba(255,255,255,0.5)">▶ &nbsp;Start</button>
     </div>
+  </sc-if>
+
+  <sc-if value="{{ gameOverVisible }}">
+    <div class="fx-screen" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 45%, rgba(30,10,8,0.5), rgba(8,4,3,0.85));gap:clamp(10px,2.6vmin,18px);color:#fff2dc;text-align:center;animation:fadeIn 0.7s ease;padding:16px;box-sizing:border-box">
+      <div class="fx-title" style="font-size:clamp(28px,8vmin,46px);font-weight:800;animation:slideUp 0.6s ease both">Koniec gry</div>
+      <div style="display:flex;gap:clamp(8px,2.2vmin,14px);flex-wrap:wrap;justify-content:center;animation:slideUp 0.6s 0.1s ease both;max-width:92vw">
+        <div class="fx-panel" style="padding:clamp(9px,2.2vmin,14px) clamp(14px,4vmin,26px);min-width:clamp(84px,22vmin,110px)">
+          <div style="font-size:clamp(22px,6vmin,30px);font-weight:800;color:#ffc247">{{ scoreLabel }}</div>
+          <div style="font-size:clamp(10px,2.6vmin,12px);opacity:0.7;text-transform:uppercase;letter-spacing:0.08em">Wynik</div>
+        </div>
+        <div class="fx-panel" style="padding:clamp(9px,2.2vmin,14px) clamp(14px,4vmin,26px);min-width:clamp(84px,22vmin,110px)">
+          <div style="font-size:clamp(22px,6vmin,30px);font-weight:800">{{ kills }}</div>
+          <div style="font-size:clamp(10px,2.6vmin,12px);opacity:0.7;text-transform:uppercase;letter-spacing:0.08em">Wrogowie</div>
+        </div>
+        <div class="fx-panel" style="padding:clamp(9px,2.2vmin,14px) clamp(14px,4vmin,26px);min-width:clamp(84px,22vmin,110px)">
+          <div style="font-size:clamp(22px,6vmin,30px);font-weight:800">{{ distanceLabel }} m</div>
+          <div style="font-size:clamp(10px,2.6vmin,12px);opacity:0.7;text-transform:uppercase;letter-spacing:0.08em">Dystans</div>
+        </div>
+      </div>
+      <div class="fx-tagline" style="font-size:clamp(13px,3.2vmin,15px);opacity:0.75;animation:slideUp 0.6s 0.18s ease both">Najlepsza seria: <b style="color:#ffc247">x{{ bestCombo }}</b></div>
+      <button onClick="{{ startGame }}" class="om-touch-btn" style="min-height:52px;padding:clamp(12px,3vmin,16px) clamp(26px,8vmin,46px);font-size:clamp(15px,4vmin,18px);font-weight:800;letter-spacing:0.04em;border:none;border-radius:12px;background:linear-gradient(180deg,#ffca5f,#e8a12d);color:#2b1c0e;cursor:pointer;box-shadow:0 6px 24px rgba(232,161,45,0.45), inset 0 1px 0 rgba(255,255,255,0.5);animation:popIn 0.5s 0.26s ease both" style-hover="transform:scale(1.06);box-shadow:0 8px 32px rgba(232,161,45,0.65), inset 0 1px 0 rgba(255,255,255,0.5)">↻ &nbsp;Zagraj ponownie</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ photoBtnVisible }}">
+    <button class="om-touch-btn" onClick="{{ onPhotoClick }}" onTouchStart="{{ onPhotoTouchStart }}" onTouchEnd="{{ onPhotoTouchEnd }}" title="Tryb foto (P)" style="position:absolute;right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;border:1px solid rgba(255,226,170,0.25);background:rgba(16,10,6,0.55);color:#fff2dc;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,0.4)" style-hover="background:rgba(40,26,12,0.7);transform:scale(1.08)">📷</button>
+  </sc-if>
+
+  <sc-if value="{{ isPhoto }}">
+    <div style="position:absolute;top:0;left:0;right:0;height:clamp(24px,6vh,60px);background:#000;animation:barTop 0.45s ease both;pointer-events:none"></div>
+    <div style="position:absolute;bottom:0;left:0;right:0;height:clamp(24px,6vh,60px);background:#000;animation:barBottom 0.45s ease both;pointer-events:none"></div>
+    <div style="position:absolute;left:0;right:0;bottom:calc(clamp(24px,6vh,60px) + 14px);text-align:center;color:#fff2dc;font-size:clamp(12px,3vw,14px);letter-spacing:0.06em;text-shadow:0 2px 6px rgba(0,0,0,0.8);animation:hintFade 3.2s ease both;pointer-events:none">Dotknij ekranu lub naciśnij P, aby wrócić do gry</div>
+    <div style="position:absolute;left:calc(14px + env(safe-area-inset-left));top:calc(clamp(24px,6vh,60px) + 12px);color:#fff2dc;opacity:0.55;font-size:clamp(11px,2.8vw,13px);font-weight:700;letter-spacing:0.08em;text-shadow:0 2px 6px rgba(0,0,0,0.8);pointer-events:none">🥷 LEŚNY NINJA: BIEG</div>
   </sc-if>
 
 </div>
@@ -55,7 +127,7 @@ class Component extends DCLogic {
     super(props);
     this.canvasRef = React.createRef();
     this.stageRef = React.createRef();
-    this.state = { gameState: 'ready', lives: 3, score: 0, distance: 0, kills: 0 };
+    this.state = { gameState: 'ready', lives: 3, score: 0, distance: 0, kills: 0, combo: 0, bestCombo: 1, photoMode: false };
     this.layers = [];
     this.enemies = [];
     this.keys = { left: false, right: false };
@@ -80,6 +152,8 @@ class Component extends DCLogic {
   handleResize = () => this.resizeCanvas();
 
   handleKeyDown = (e) => {
+    if (['p', 'P'].includes(e.key)) { this.togglePhotoMode(); return; }
+    if (this.state.photoMode) return;
     if (['ArrowLeft', 'a', 'A'].includes(e.key)) this.keys.left = true;
     if (['ArrowRight', 'd', 'D'].includes(e.key)) this.keys.right = true;
     if (['ArrowUp', 'w', 'W', ' '].includes(e.key)) { e.preventDefault(); this.tryJump(); }
@@ -112,6 +186,7 @@ class Component extends DCLogic {
     this.groundProfile = [ { x: 0, h: 190 }, { x: 100000, h: 190 } ];
 
     this.animator = new AnimatorController(CHARACTER_ANIM_DATA);
+    this.fx = new FXSystem();
 
     this.enemySheet = new Image();
     this.enemySheet.src = 'layers/enemy.png';
@@ -133,6 +208,7 @@ class Component extends DCLogic {
     canvas.height = window.innerHeight * dpr;
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (this.fx) this.fx.resize(window.innerWidth, window.innerHeight);
   }
 
   startGame = () => {
@@ -141,22 +217,72 @@ class Component extends DCLogic {
       x: w * 0.22, y: 0, vy: 0, onGround: true,
       minX: w * 0.08, maxX: w * 0.42,
       facingRight: true, invuln: 0,
+      // squash & stretch — sprężynują z powrotem do 1 w każdej klatce
+      sx: 1, sy: 1,
     };
     this.enemies = [];
     this.gameSpeed = 260;
     this.spawnTimer = 1.4;
     this.ghostSpawnTimer = 3;
     this.elapsedPlaying = 0;
+    this.dustTimer = 0;
+    this.trail = [];          // poświata za graczem w powietrzu
+    this.trailTimer = 0;
+    this.comboTimer = 0;      // okno czasowe na podtrzymanie serii
     this.layers.forEach(l => l.scrollX = 0);
     if (this.animator) this.animator.reset('idle');
-    this.setState({ gameState: 'playing', lives: 3, score: 0, distance: 0, kills: 0 });
+    if (this.fx) this.fx.reset();
+    this.setState({ gameState: 'playing', lives: 3, score: 0, distance: 0, kills: 0, combo: 0, bestCombo: 1, photoMode: false });
+  };
+
+  // Tryb foto: pauzuje świat gry i chowa HUD — czysty kadr do zrzutów
+  // i nagrań. Wejście: przycisk 📷 lub klawisz P; wyjście: dotknięcie
+  // ekranu, kliknięcie albo ponowne P.
+  togglePhotoMode = () => {
+    const s = this.state.gameState;
+    if (s !== 'playing' && s !== 'gameover') return;
+    this.keys.left = false;
+    this.keys.right = false;
+    this.setState(st => ({ photoMode: !st.photoMode }));
+  };
+
+  // stopPropagation: dotknięcie przycisku 📷 nie może uruchomić biegu
+  // (rodzic-scena nasłuchuje dotyku całych połówek ekranu). Przełącza
+  // touchend; emulowany click, który przeglądarka wysyła po dotyku,
+  // jest deduplikowany po czasie — bez preventDefault, bo listenery
+  // dotykowe Reacta są pasywne.
+  onPhotoClick = (e) => {
+    e.stopPropagation();
+    if (performance.now() - (this.photoTouchAt || 0) < 700) return;
+    this.togglePhotoMode();
+  };
+  onPhotoTouchStart = (e) => { e.stopPropagation(); };
+  onPhotoTouchEnd = (e) => {
+    e.stopPropagation();
+    if (e.cancelable) e.preventDefault(); // blokuje emulowany click po dotyku
+    this.photoTouchAt = performance.now();
+    this.togglePhotoMode();
+  };
+
+  onStageClick = () => {
+    if (!this.state.photoMode) return;
+    // Emulowany click po tapnięciu 📷 trafiłby w scenę (przycisk już zniknął)
+    // i od razu wyszedłby z trybu foto — ignorujemy go w krótkim oknie.
+    if (performance.now() - (this.photoTouchAt || 0) < 700) return;
+    this.togglePhotoMode();
   };
 
   tryJump() {
-    if (this.state.gameState !== 'playing' || !this.player) return;
+    if (this.state.gameState !== 'playing' || !this.player || this.state.photoMode) return;
     if (this.player.onGround) {
-      this.player.vy = -900;
-      this.player.onGround = false;
+      const p = this.player;
+      p.vy = -900;
+      p.onGround = false;
+      p.sx = 0.8; p.sy = 1.22; // rozciągnięcie przy wybiciu
+      if (this.fx) {
+        const groundY = this.computeGroundY(window.innerWidth, window.innerHeight, p.x);
+        this.fx.emitJump(p.x, groundY);
+      }
     }
   }
 
@@ -167,6 +293,7 @@ class Component extends DCLogic {
   onJump = (e) => { if (e.cancelable) e.preventDefault(); this.tryJump(); };
 
   onStageTouchStart = (e) => {
+    if (this.state.photoMode) return;
     const t = e.touches[0];
     this.swipe = { x: t.clientX, y: t.clientY, t: performance.now(), moved: false };
     // hold on left/right half of screen to run that direction, same gesture area as swipe-up jump
@@ -179,6 +306,9 @@ class Component extends DCLogic {
     if (Math.abs(t.clientY - this.swipe.y) > 10 || Math.abs(t.clientX - this.swipe.x) > 10) this.swipe.moved = true;
   };
   onStageTouchEnd = (e) => {
+    // W trybie foto dotknięcie ekranu wraca do gry (klik na iOS/Android
+    // bywa pomijany nad canvasem, więc reagujemy wprost na touchend).
+    if (this.state.photoMode) { this.swipe = null; this.togglePhotoMode(); return; }
     this.keys.left = false;
     this.keys.right = false;
     if (!this.swipe) return;
@@ -230,7 +360,63 @@ class Component extends DCLogic {
 
   spawnGhost(w, groundY) {
     const flyHeight = 90 + Math.random() * 70;
-    this.enemies.push({ type: 'ghost', x: w + 60, y: groundY - flyHeight, w: 50, h: 60, alive: true, dead: false, deadTimer: 0, bob: Math.random() * Math.PI * 2 });
+    this.enemies.push({ type: 'ghost', x: w + 60, y: groundY - flyHeight, w: 50, h: 60, alive: true, dead: false, deadTimer: 0, bob: Math.random() * Math.PI * 2, wispTimer: 0 });
+  }
+
+  // Pokonanie wroga: punkty rosną z serią, świat dostaje "cios" (hit-stop,
+  // shake, iskry, fala uderzeniowa, popup).
+  onStompKill(en, enY) {
+    const p = this.player;
+    en.alive = false; en.dead = true; en.deadTimer = 0;
+    p.vy = -560;
+    p.sx = 0.85; p.sy = 1.15;
+
+    this.comboTimer = 2.0;
+    const combo = this.state.combo + 1;
+    const points = 10 * combo;
+
+    this.fx.emitStompBurst(en.x, enY - en.h * 0.5);
+    this.fx.addTrauma(0.28);
+    this.fx.addHitStop(0.06);
+    this.fx.flash(0.06, '255, 220, 140');
+    this.fx.spawnPopup(en.x, enY - en.h - 24, '+' + points, '#ffd670', 24);
+    if (combo >= 2) {
+      this.fx.spawnPopup(en.x, enY - en.h - 56, 'SERIA x' + combo + '!', '#ff9d3b', 20 + Math.min(10, combo * 2));
+      this.fx.addTrauma(0.06 * Math.min(4, combo));
+    }
+
+    this.setState(s => ({
+      score: s.score + points,
+      kills: s.kills + 1,
+      combo,
+      bestCombo: Math.max(s.bestCombo, combo),
+    }));
+  }
+
+  // Trafienie gracza: czerwony rozbłysk, mocny shake, hit-stop; przy utracie
+  // ostatniego życia — slow-motion i przejście do ekranu końca.
+  onPlayerHit(en, enY) {
+    const p = this.player;
+    en.alive = false; en.dead = true; en.deadTimer = 0;
+    p.invuln = 1.1;
+    this.comboTimer = 0;
+
+    this.fx.emitHitSparks(p.x, enY - en.h * 0.5);
+    this.fx.addTrauma(0.55);
+    this.fx.addHitStop(0.11);
+    this.fx.flash(0.55, '231, 76, 60');
+
+    this.setState(s => {
+      const lives = s.lives - 1;
+      if (lives <= 0) {
+        this.animator.play('death', { force: true });
+        this.fx.addSlowMo(1.1, 0.3);
+        this.fx.addTrauma(0.4);
+        return { lives, gameState: 'gameover', combo: 0 };
+      }
+      this.animator.play('hit', { force: true });
+      return { lives, gameState: 'playing', combo: 0 };
+    });
   }
 
   tick = (now) => {
@@ -238,13 +424,19 @@ class Component extends DCLogic {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const w = window.innerWidth, h = window.innerHeight;
-    const dt = Math.min((now - this.lastTime) / 1000, 0.05);
+    const rawDt = Math.min((now - this.lastTime) / 1000, 0.05);
     this.lastTime = now;
+    // FX skaluje czas świata (hit-stop / slow-motion) i liczy shake kamery.
+    // Tryb foto zamraża świat całkowicie (dt = 0) — pętla dalej rysuje ten
+    // sam kadr, a ambient (promienie, świetliki) subtelnie żyje na zegarze fx.
+    const photo = this.state.photoMode;
+    const worldDt = this.fx.tick(rawDt);
+    const dt = photo ? 0 : worldDt;
     const groundY = this.computeGroundY(w, h, this.player ? this.player.x : undefined);
     const playing = this.state.gameState === 'playing';
     const gameOver = this.state.gameState === 'gameover';
 
-    if (playing && this.player) {
+    if (playing && !photo && this.player) {
       this.elapsedPlaying += dt;
       this.gameSpeed = Math.min(260 + this.elapsedPlaying * 6, 620);
       const spawnInterval = Math.max(1.5 - this.elapsedPlaying * 0.02, 0.55);
@@ -254,10 +446,55 @@ class Component extends DCLogic {
       if (this.keys.right) { p.x += 340 * dt; }
       p.x = Math.max(p.minX, Math.min(p.maxX, p.x));
 
+      const wasAirborne = !p.onGround;
+      const fallSpeed = p.vy;
       p.vy += 2200 * dt;
       p.y += p.vy * dt;
       if (p.y >= 0) { p.y = 0; p.vy = 0; p.onGround = true; }
       if (p.invuln > 0) p.invuln -= dt;
+
+      // Lądowanie: kurz + zgniecenie sylwetki zależne od siły upadku.
+      if (wasAirborne && p.onGround) {
+        const impact = Math.min(1, Math.max(0, fallSpeed) / 1300);
+        this.fx.emitLanding(p.x, groundY, impact);
+        p.sx = 1 + 0.3 * impact; p.sy = 1 - 0.28 * impact;
+        if (impact > 0.5) this.fx.addTrauma(0.12 * impact);
+        this.trail.length = 0;
+      }
+
+      // Sprężyna squash & stretch — powrót do proporcji 1:1.
+      p.sx += (1 - p.sx) * Math.min(1, dt * 12);
+      p.sy += (1 - p.sy) * Math.min(1, dt * 12);
+
+      // Kurz spod stóp podczas biegu po ziemi.
+      if (p.onGround && (this.keys.left || this.keys.right)) {
+        this.dustTimer -= dt;
+        if (this.dustTimer <= 0) {
+          this.dustTimer = 0.09;
+          this.fx.emitRunDust(p.x, groundY, this.keys.right ? 1 : -1);
+        }
+      }
+
+      // Poświata w powietrzu — zapamiętujemy ostatnie pozy do narysowania echa.
+      if (!p.onGround) {
+        this.trailTimer -= dt;
+        if (this.trailTimer <= 0 && this.animator && this.animator.currentSheet) {
+          this.trailTimer = 0.045;
+          const f = this.animator.getCurrentFrame();
+          this.trail.push({ x: p.x, y: p.y, f, life: 0.22 });
+          if (this.trail.length > 4) this.trail.shift();
+        }
+      }
+      for (let i = this.trail.length - 1; i >= 0; i--) {
+        this.trail[i].life -= dt;
+        if (this.trail[i].life <= 0) this.trail.splice(i, 1);
+      }
+
+      // Okno serii — po 2 s bez trafienia licznik wraca do zera.
+      if (this.comboTimer > 0) {
+        this.comboTimer -= dt;
+        if (this.comboTimer <= 0 && this.state.combo > 0) this.setState({ combo: 0 });
+      }
 
       if (p.invuln <= 0.9) {
         if (!p.onGround) this.animator.play('jump');
@@ -286,24 +523,20 @@ class Component extends DCLogic {
           if (en.frameTimer > 0.08) { en.frameTimer = 0; en.frame = (en.frame + 1) % this.enemyFrameCount; }
         }
         const enY = en.type === 'ghost' ? en.y + Math.sin(en.bob) * 12 : en.y;
+        // Duchy zostawiają za sobą zimną smużkę.
+        if (en.type === 'ghost') {
+          en.wispTimer -= dt;
+          if (en.wispTimer <= 0) {
+            en.wispTimer = 0.07;
+            this.fx.emitWisp(en.x + en.w * 0.4, enY - en.h * 0.5);
+          }
+        }
         const eBox = { x: en.x - en.w / 2, y: enY - en.h, w: en.w, h: en.h };
         const overlap = pBox.x < eBox.x + eBox.w && pBox.x + pBox.w > eBox.x && pBox.y < eBox.y + eBox.h && pBox.y + pBox.h > eBox.y;
         if (overlap && en.alive) {
           const fallingOnTop = en.type === 'ground' && p.vy > 0 && (pBox.y + pBox.h) - eBox.y < eBox.h * 0.6;
-          if (fallingOnTop) {
-            en.alive = false; en.dead = true; en.deadTimer = 0;
-            p.vy = -560;
-            this.setState(s => ({ score: s.score + 10, kills: s.kills + 1 }));
-          } else if (p.invuln <= 0) {
-            en.alive = false; en.dead = true; en.deadTimer = 0;
-            p.invuln = 1.1;
-            this.setState(s => {
-              const lives = s.lives - 1;
-              if (lives <= 0) { this.animator.play('death', { force: true }); return { lives, gameState: 'gameover' }; }
-              this.animator.play('hit', { force: true });
-              return { lives, gameState: 'playing' };
-            });
-          }
+          if (fallingOnTop) this.onStompKill(en, enY);
+          else if (p.invuln <= 0) this.onPlayerHit(en, enY);
         }
       });
       this.enemies = this.enemies.filter(en => en.x > -100 && !(en.dead && en.deadTimer > 0.4));
@@ -314,7 +547,14 @@ class Component extends DCLogic {
       this.animator.update(dt * 1000);
     }
 
+    // Efekty żyją zawsze (także na ekranie startowym — ambient buduje klimat).
+    this.fx.update(dt, { w, h, gameSpeed: playing ? this.gameSpeed : 40, groundY, playing });
+
     ctx.clearRect(0, 0, w, h);
+
+    // ---- Świat gry: wszystko w transformacji shake kamery ----
+    ctx.save();
+    ctx.translate(this.fx.shakeX, this.fx.shakeY);
 
     const bgScrollMult = playing ? this.gameSpeed : 40;
     this.layers.forEach((layer) => {
@@ -348,11 +588,19 @@ class Component extends DCLogic {
       ctx.globalCompositeOperation = 'source-over';
     });
 
+    // Ambient za postaciami: promienie światła, świetliki.
+    this.fx.drawAmbient(ctx, groundY);
+
     if ((playing || gameOver) && this.player) {
-      if (playing) this.enemies.forEach(en => this.drawEnemy(ctx, en, groundY));
+      this.enemies.forEach(en => this.drawEnemy(ctx, en, groundY));
+      this.drawTrail(ctx, groundY);
       this.drawPlayer(ctx, this.player, groundY);
     }
 
+    // Cząsteczki, fale uderzeniowe i popupy — nad postaciami.
+    this.fx.drawEffects(ctx);
+
+    // Pierwszy plan (gałęzie, ramka) przykrywa efekty — buduje głębię.
     this.layers.forEach((layer) => {
       if (layer.mult <= 1.0) return;
       const img = layer.img;
@@ -365,6 +613,10 @@ class Component extends DCLogic {
       if (x > 0) x -= drawW;
       for (let px = x; px < w; px += drawW) ctx.drawImage(img, px, baseY, drawW, drawH);
     });
+
+    ctx.restore();
+    // ---- Nakładki pełnoekranowe (bez shake): mgła, grading, winieta, flash ----
+    this.fx.drawOverlay(ctx, groundY);
 
     this.raf = requestAnimationFrame(this.tick);
   };
@@ -390,6 +642,7 @@ class Component extends DCLogic {
     const bob = Math.sin(en.bob) * 3;
     const displayH = 84, displayW = displayH * (fw / fh);
     const x = en.x, yBase = en.y + bob + displayH * 0.22 + 15;
+    this.fx.drawShadow(ctx, x, en.y + 8, displayW * 0.34, 0);
     ctx.drawImage(this.enemySheet, en.frame * fw, 0, fw, fh, x - displayW / 2, yBase - displayH, displayW, displayH);
   }
 
@@ -398,6 +651,8 @@ class Component extends DCLogic {
     const y = en.y + Math.sin(en.bob) * 12;
     const x = en.x;
     const w = en.w, h = en.h;
+    // Zimna poświata pod duchem — od razu czyta się jako "inny" typ wroga.
+    this.fx.drawGlow(ctx, x, y - h * 0.4, w * 2.6, en.dead ? Math.max(0, 1 - en.deadTimer / 0.4) * 0.5 : 0.5);
     ctx.save();
     if (en.dead) ctx.globalAlpha = Math.max(0, 1 - en.deadTimer / 0.4);
     ctx.globalAlpha *= 0.85;
@@ -419,22 +674,44 @@ class Component extends DCLogic {
     ctx.restore();
   }
 
+  // Echo sylwetki gracza podczas skoku — im starsze, tym bledsze.
+  drawTrail(ctx, groundY) {
+    if (!this.trail || !this.trail.length) return;
+    const displayH = 170;
+    for (const t of this.trail) {
+      const f = t.f;
+      const displayW = displayH * (f.sWidth / f.sHeight);
+      const drawX = t.x, drawY = groundY + t.y + displayH * 0.22;
+      ctx.save();
+      ctx.globalAlpha = (t.life / 0.22) * 0.22;
+      ctx.translate(drawX, drawY);
+      ctx.drawImage(f.sheet, f.sx, f.sy, f.sWidth, f.sHeight, -displayW / 2, -displayH, displayW, displayH);
+      ctx.restore();
+    }
+  }
+
   drawPlayer(ctx, p, groundY) {
     if (!this.animator || !this.animator.currentSheet || !this.animator.currentSheet.complete) return;
     const f = this.animator.getCurrentFrame();
     const displayH = 170, displayW = displayH * (f.sWidth / f.sHeight);
     const drawX = p.x, drawY = groundY + p.y + displayH * 0.22;
+    this.fx.drawShadow(ctx, p.x, groundY, displayW * 0.28, p.y);
     ctx.save();
     if (p.invuln > 0 && Math.floor(p.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.4;
     ctx.translate(drawX, drawY);
-    if (!p.facingRight) ctx.scale(-1, 1);
+    // Squash & stretch skaluje sylwetkę wokół punktu przy stopach.
+    ctx.scale((p.facingRight ? 1 : -1) * (p.sx || 1), p.sy || 1);
     ctx.drawImage(f.sheet, f.sx, f.sy, f.sWidth, f.sHeight, -displayW / 2, -displayH, displayW, displayH);
     ctx.restore();
   }
 
   renderVals() {
     const s = this.state;
-    const hearts = [0, 1, 2].map(i => ({ icon: '❤️', opacity: i < s.lives ? 1 : 0.25 }));
+    const hearts = [0, 1, 2].map(i => ({
+      opacity: i < s.lives ? 1 : 0.3,
+      filter: i < s.lives ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))' : 'grayscale(1) brightness(0.6)',
+      scale: i < s.lives ? 1 : 0.82,
+    }));
     return {
       canvasRef: this.canvasRef,
       stageRef: this.stageRef,
@@ -442,13 +719,23 @@ class Component extends DCLogic {
       isReady: s.gameState === 'ready',
       isPlaying: s.gameState === 'playing',
       isGameOver: s.gameState === 'gameover',
+      isPhoto: s.photoMode,
+      hudVisible: !s.photoMode && s.gameState !== 'ready',
+      gameOverVisible: s.gameState === 'gameover' && !s.photoMode,
+      photoBtnVisible: (s.gameState === 'playing' || s.gameState === 'gameover') && !s.photoMode,
       scoreLabel: Math.floor(s.score).toString(),
       distanceLabel: Math.floor(s.distance).toString(),
       kills: s.kills,
+      comboLabel: s.combo >= 2 ? 'SERIA x' + s.combo : '',
+      bestCombo: s.bestCombo,
       startGame: this.startGame,
       onLeftDown: this.onLeftDown, onLeftUp: this.onLeftUp,
       onRightDown: this.onRightDown, onRightUp: this.onRightUp,
       onJump: this.onJump,
+      onPhotoClick: this.onPhotoClick,
+      onPhotoTouchStart: this.onPhotoTouchStart,
+      onPhotoTouchEnd: this.onPhotoTouchEnd,
+      onStageClick: this.onStageClick,
       onStageTouchStart: this.onStageTouchStart,
       onStageTouchMove: this.onStageTouchMove,
       onStageTouchEnd: this.onStageTouchEnd,
