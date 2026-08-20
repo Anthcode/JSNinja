@@ -197,12 +197,23 @@ class Component extends DCLogic {
 
   // ==== Orientacja i pełny ekran (tylko mobile) ====
 
-  // Wykrywanie po możliwościach urządzenia, nie po User-Agent: dotyk bez
-  // hovera to telefon albo tablet. Desktop nie dostaje ani pełnego ekranu,
-  // ani prośby o obrót.
+  // Wykrywanie po możliwościach urządzenia, nie po User-Agent.
+  //
+  // Wystarczy sam gruby wskaźnik: „pointer" opisuje wskaźnik GŁÓWNY, więc
+  // laptop z ekranem dotykowym raportuje tu fine (główna jest myszka) i nie
+  // złapie się w warunek. Świadomie nie dokładamy „hover: none" — część
+  // Androidów (podpięta myszka, tryb desktopowy, niektóre nakładki
+  // producenta) raportuje hover: hover i wypadała z wykrywania mimo
+  // ewidentnie dotykowego ekranu.
+  //
+  // Drugi warunek łapie telefon z podpiętym wskaźnikiem precyzyjnym:
+  // jakikolwiek gruby wskaźnik przy dotykowym ekranie i małej przekątnej.
+  // Laptopy dotykowe odpadają na progu szerokości.
   detectMobile() {
-    return window.matchMedia('(pointer: coarse)').matches
-        && window.matchMedia('(hover: none)').matches;
+    if (window.matchMedia('(pointer: coarse)').matches) return true;
+    return window.matchMedia('(any-pointer: coarse)').matches
+        && navigator.maxTouchPoints > 0
+        && Math.min(window.screen.width, window.screen.height) <= 500;
   }
 
   handleOrientation = () => {
