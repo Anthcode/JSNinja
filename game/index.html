@@ -3,6 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#1a1410">
+<!-- Po dodaniu do ekranu głównego gra startuje bez paska adresu; Android bierze
+     orientację z manifestu, iOS honoruje tylko te dwa metatagi. -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" href="./icons/icon-192.png" type="image/png">
 <script src="./support.js"></script>
 </head>
 <body>
@@ -22,10 +31,20 @@
   @keyframes barTop { from { transform: translateY(-100%) } to { transform: translateY(0) } }
   @keyframes barBottom { from { transform: translateY(100%) } to { transform: translateY(0) } }
   @keyframes hintFade { 0% { opacity: 0 } 12% { opacity: 1 } 72% { opacity: 1 } 100% { opacity: 0 } }
+  @keyframes rotatePhone {
+    0%, 18%   { transform: rotate(0deg) }
+    42%, 78%  { transform: rotate(-90deg) }
+    100%      { transform: rotate(0deg) }
+  }
   /* Runtime nie zeruje marginesu body w trybie podglądu — domyślne 8px
      tworzyłoby poziomy overflow na scenie o szerokości 100vw. */
-  html, body { margin: 0; padding: 0; overscroll-behavior: none; }
+  html, body { margin: 0; padding: 0; overscroll-behavior: none; background: #1a1410; }
   .om-touch-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  /* Wymiary sceny trzymamy w klasie, nie w atrybucie style: runtime zwija
+     inline CSS do obiektu (support.js cssToObj), więc powtórzona deklaracja
+     height zjadłaby fallback. W kaskadzie 100dvh po prostu nadpisuje 100vh
+     tam, gdzie jednostka jest wspierana. */
+  .fx-stage { width: 100vw; height: 100vh; height: 100dvh; }
   /* Mobile first: na niskich ekranach (telefon w poziomie) zagęszczamy układ. */
   @media (max-height: 480px) {
     .fx-screen { gap: 10px !important; }
@@ -53,7 +72,7 @@
 <script src="./spriteAnimator.js"></script>
 <script src="./effects.js"></script>
 </helmet>
-<div style="position:relative;width:100vw;height:100vh;overflow:hidden;background:#1a1410;font-family:'Trebuchet MS',sans-serif;user-select:none;touch-action:none" tabIndex="0" ref="{{ stageRef }}" onClick="{{ onStageClick }}" onTouchStart="{{ onStageTouchStart }}" onTouchMove="{{ onStageTouchMove }}" onTouchEnd="{{ onStageTouchEnd }}">
+<div class="fx-stage" style="position:relative;overflow:hidden;background:#1a1410;font-family:'Trebuchet MS',sans-serif;user-select:none;touch-action:none" tabIndex="0" ref="{{ stageRef }}" onClick="{{ onStageClick }}" onTouchStart="{{ onStageTouchStart }}" onTouchMove="{{ onStageTouchMove }}" onTouchEnd="{{ onStageTouchEnd }}">
   <canvas ref="{{ canvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block;animation:fadeIn 0.6s ease"></canvas>
 
   <sc-if value="{{ hudVisible }}">
@@ -119,6 +138,17 @@
     <div style="position:absolute;left:calc(14px + env(safe-area-inset-left));top:calc(clamp(24px,6vh,60px) + 12px);color:#fff2dc;opacity:0.55;font-size:clamp(11px,2.8vw,13px);font-weight:700;letter-spacing:0.08em;text-shadow:0 2px 6px rgba(0,0,0,0.8);pointer-events:none">🥷 LEŚNY NINJA: BIEG</div>
   </sc-if>
 
+  <!-- Ostatnie dziecko sceny: pozostałe nakładki nie ustawiają z-index, więc
+       kolejność w DOM wystarczy, żeby prośba o obrót przykryła wszystko. -->
+  <sc-if value="{{ portraitBlockVisible }}">
+    <div class="fx-screen" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 45%, #241a10, #0a0705);gap:clamp(14px,4vmin,26px);color:#fff2dc;text-align:center;animation:fadeIn 0.35s ease;padding:20px;box-sizing:border-box">
+      <div style="font-size:clamp(56px,20vmin,110px);line-height:1;animation:rotatePhone 3s ease-in-out infinite;filter:drop-shadow(0 6px 18px rgba(0,0,0,0.7))">📱</div>
+      <div class="fx-title" style="font-size:clamp(24px,7vmin,42px);font-weight:800;line-height:1.1">Obróć telefon</div>
+      <div style="font-size:clamp(13px,3.4vmin,16px);opacity:0.85;max-width:min(420px,86vw);line-height:1.55">Gra działa w orientacji poziomej. Obróć urządzenie, aby grać dalej.</div>
+      <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(11px,2.8vmin,13px);opacity:0.8">🔓 &nbsp;Sprawdź, czy blokada obrotu ekranu jest wyłączona</div>
+    </div>
+  </sc-if>
+
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:720}}">
@@ -127,31 +157,89 @@ class Component extends DCLogic {
     super(props);
     this.canvasRef = React.createRef();
     this.stageRef = React.createRef();
-    this.state = { gameState: 'ready', lives: 3, score: 0, distance: 0, kills: 0, combo: 0, bestCombo: 1, photoMode: false };
+    this.state = { gameState: 'ready', lives: 3, score: 0, distance: 0, kills: 0, combo: 0, bestCombo: 1, photoMode: false, portraitBlock: false };
     this.layers = [];
     this.enemies = [];
     this.keys = { left: false, right: false };
     this.t0 = performance.now();
     this.lastTime = this.t0;
+    // Wymiary sceny w px CSS — mierzone z elementu, nie z window (patrz resizeCanvas).
+    this.viewW = 0;
+    this.viewH = 0;
   }
 
   componentDidMount() {
+    this.isMobile = this.detectMobile();
+    this.portraitMq = window.matchMedia('(orientation: portrait)');
+    this.portraitMq.addEventListener('change', this.handleOrientation);
     this.loadLayers();
     window.addEventListener('resize', this.handleResize);
+    // orientationchange leci na iOS zanim layout się przeliczy — handleResize
+    // mierzy dopiero w kolejnej klatce, więc dostaje już nowe wymiary.
+    window.addEventListener('orientationchange', this.handleResize);
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('keyup', this.handleKeyUp);
+    this.handleOrientation();
+    // Mierzymy scenę od razu: loadLayers jest asynchroniczne, a przycisk
+    // „Start" da się kliknąć zanim warstwy dojadą.
+    this.resizeCanvas();
   }
 
   componentWillUnmount() {
     cancelAnimationFrame(this.raf);
+    cancelAnimationFrame(this.resizeRaf);
+    this.portraitMq.removeEventListener('change', this.handleOrientation);
     window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('orientationchange', this.handleResize);
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
   }
 
-  handleResize = () => this.resizeCanvas();
+  // ==== Orientacja i pełny ekran (tylko mobile) ====
+
+  // Wykrywanie po możliwościach urządzenia, nie po User-Agent: dotyk bez
+  // hovera to telefon albo tablet. Desktop nie dostaje ani pełnego ekranu,
+  // ani prośby o obrót.
+  detectMobile() {
+    return window.matchMedia('(pointer: coarse)').matches
+        && window.matchMedia('(hover: none)').matches;
+  }
+
+  handleOrientation = () => {
+    const blocked = !!(this.isMobile && this.portraitMq.matches);
+    if (blocked === this.state.portraitBlock) return;
+    // Bez tego gracz zablokowany w trakcie biegu zostaje z wciśniętym kierunkiem.
+    if (blocked) { this.keys.left = false; this.keys.right = false; }
+    this.setState({ portraitBlock: blocked });
+  };
+
+  // Wołane wyłącznie ze startGame — to jedyny moment z aktywnym gestem
+  // użytkownika, a poza gestem przeglądarka i tak odrzuci oba żądania.
+  // Każdy krok osobno w try/catch: iOS nie zna Fullscreen API na iPhonie
+  // i odrzuca orientation.lock, a niezłapane odrzucenie zaśmieca konsolę.
+  async enterImmersive() {
+    if (!this.isMobile) return;
+    try {
+      const root = document.documentElement;
+      if (!document.fullscreenElement && root.requestFullscreen) {
+        await root.requestFullscreen({ navigationUI: 'hide' });
+      }
+    } catch (_) { /* odmowa albo brak wsparcia — gramy dalej w oknie */ }
+    try {
+      await screen.orientation?.lock?.('landscape');
+    } catch (_) { /* brak blokady — zostaje nakładka „Obróć telefon" */ }
+  }
+
+  handleResize = () => {
+    // fx.resize() realokuje trzy pełnoekranowe canvasy offscreen, a obrót
+    // ekranu i zwijanie paska adresu sypią serią zdarzeń — zbieramy je do
+    // jednej klatki.
+    cancelAnimationFrame(this.resizeRaf);
+    this.resizeRaf = requestAnimationFrame(() => this.resizeCanvas());
+  };
 
   handleKeyDown = (e) => {
+    if (this.state.portraitBlock) return;
     if (['p', 'P'].includes(e.key)) { this.togglePhotoMode(); return; }
     if (this.state.photoMode) return;
     if (['ArrowLeft', 'a', 'A'].includes(e.key)) this.keys.left = true;
@@ -201,18 +289,39 @@ class Component extends DCLogic {
   }
 
   resizeCanvas() {
-    const canvas = this.canvasRef.current;
-    if (!canvas) return;
+    const canvas = this.canvasRef.current, stage = this.stageRef.current;
+    if (!canvas || !stage) return;
+    // Mierzymy scenę, nie okno: CSS-owa wysokość sceny (100dvh) i
+    // window.innerHeight rozjeżdżają się przy chowaniu paska adresu oraz
+    // wejściu w pełny ekran, co niejednorodnie rozciągało canvas.
+    const rect = stage.getBoundingClientRect();
+    const w = Math.round(rect.width), h = Math.round(rect.height);
+    if (!w || !h) return;
+    this.viewW = w;
+    this.viewH = h;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = window.innerWidth * dpr;
-    canvas.height = window.innerHeight * dpr;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (this.fx) this.fx.resize(window.innerWidth, window.innerHeight);
+    if (this.fx) this.fx.resize(w, h);
+    this.rescalePlayerBounds();
+  }
+
+  // Granice ruchu policzone w startGame przestają pasować po obrocie ekranu —
+  // przeliczamy je i wciągamy gracza z powrotem w kadr.
+  rescalePlayerBounds() {
+    const p = this.player;
+    if (!p) return;
+    p.minX = this.viewW * 0.08;
+    p.maxX = this.viewW * 0.42;
+    p.x = Math.min(Math.max(p.x, p.minX), p.maxX);
   }
 
   startGame = () => {
-    const w = window.innerWidth, h = window.innerHeight;
+    this.enterImmersive();
+    if (!this.viewW || !this.viewH) this.resizeCanvas();
+    const w = this.viewW, h = this.viewH;
     this.player = {
       x: w * 0.22, y: 0, vy: 0, onGround: true,
       minX: w * 0.08, maxX: w * 0.42,
@@ -273,14 +382,14 @@ class Component extends DCLogic {
   };
 
   tryJump() {
-    if (this.state.gameState !== 'playing' || !this.player || this.state.photoMode) return;
+    if (this.state.gameState !== 'playing' || !this.player || this.state.photoMode || this.state.portraitBlock) return;
     if (this.player.onGround) {
       const p = this.player;
       p.vy = -900;
       p.onGround = false;
       p.sx = 0.8; p.sy = 1.22; // rozciągnięcie przy wybiciu
       if (this.fx) {
-        const groundY = this.computeGroundY(window.innerWidth, window.innerHeight, p.x);
+        const groundY = this.computeGroundY(this.viewW, this.viewH, p.x);
         this.fx.emitJump(p.x, groundY);
       }
     }
@@ -293,11 +402,11 @@ class Component extends DCLogic {
   onJump = (e) => { if (e.cancelable) e.preventDefault(); this.tryJump(); };
 
   onStageTouchStart = (e) => {
-    if (this.state.photoMode) return;
+    if (this.state.photoMode || this.state.portraitBlock) return;
     const t = e.touches[0];
     this.swipe = { x: t.clientX, y: t.clientY, t: performance.now(), moved: false };
     // hold on left/right half of screen to run that direction, same gesture area as swipe-up jump
-    if (t.clientX < window.innerWidth / 2) this.keys.left = true;
+    if (t.clientX < this.viewW / 2) this.keys.left = true;
     else this.keys.right = true;
   };
   onStageTouchMove = (e) => {
@@ -423,20 +532,23 @@ class Component extends DCLogic {
     const canvas = this.canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const w = window.innerWidth, h = window.innerHeight;
+    const w = this.viewW, h = this.viewH;
     const rawDt = Math.min((now - this.lastTime) / 1000, 0.05);
     this.lastTime = now;
     // FX skaluje czas świata (hit-stop / slow-motion) i liczy shake kamery.
     // Tryb foto zamraża świat całkowicie (dt = 0) — pętla dalej rysuje ten
     // sam kadr, a ambient (promienie, świetliki) subtelnie żyje na zegarze fx.
+    // Prośba o obrót telefonu zamraża tak samo: gracz nie traci życia,
+    // patrząc na nakładkę.
     const photo = this.state.photoMode;
+    const frozen = photo || this.state.portraitBlock;
     const worldDt = this.fx.tick(rawDt);
-    const dt = photo ? 0 : worldDt;
+    const dt = frozen ? 0 : worldDt;
     const groundY = this.computeGroundY(w, h, this.player ? this.player.x : undefined);
     const playing = this.state.gameState === 'playing';
     const gameOver = this.state.gameState === 'gameover';
 
-    if (playing && !photo && this.player) {
+    if (playing && !frozen && this.player) {
       this.elapsedPlaying += dt;
       this.gameSpeed = Math.min(260 + this.elapsedPlaying * 6, 620);
       const spawnInterval = Math.max(1.5 - this.elapsedPlaying * 0.02, 0.55);
@@ -720,6 +832,7 @@ class Component extends DCLogic {
       isPlaying: s.gameState === 'playing',
       isGameOver: s.gameState === 'gameover',
       isPhoto: s.photoMode,
+      portraitBlockVisible: s.portraitBlock,
       hudVisible: !s.photoMode && s.gameState !== 'ready',
       gameOverVisible: s.gameState === 'gameover' && !s.photoMode,
       photoBtnVisible: (s.gameState === 'playing' || s.gameState === 'gameover') && !s.photoMode,
