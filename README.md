@@ -29,15 +29,32 @@ Wskocz wrogowi na głowę, aby go pokonać — kolejne trafienia w krótkim czas
   winieta z ciepłą korekcją koloru, fale uderzeniowe i pływające napisy (+10, SERIA x3!).
 - **UI**: szklane panele HUD, licznik serii, animowane ekrany startu i końca gry.
 
+## Dźwięk
+
+`AudioManager` (w `index.html`) preloaduje krótkie efekty z `game/sfx/` i odtwarza je
+przez `cloneNode`, więc mogą się nakładać (np. seria stompów jedna po drugiej):
+
+| Zdarzenie | Plik |
+| --- | --- |
+| Start gry | `game-start.mp3` |
+| Skok | `jump.mp3` |
+| Pokonanie wroga (stomp) | `stomp-kill.mp3` + `score-tick.mp3` |
+| Seria trafień (≥2) | `combo.mp3` |
+| Nowy rekord serii | `best-combo.mp3` |
+| Trafienie przez wroga naziemnego | `player-hit.mp3` |
+| Trafienie przez ducha | `ghost-hit.mp3` |
+| Utrata ostatniego życia | `game-over.mp3` |
+
 ## Architektura
 
 ```
 game/
-├── index.html        – logika gry (komponent DC): pętla, fizyka, kolizje, rysowanie
+├── index.html        – logika gry (komponent DC): pętla, fizyka, kolizje, rysowanie, dźwięk (AudioManager)
 ├── effects.js        – FXSystem: cząsteczki, kamera, ambient, nakładki ekranowe
 ├── spriteAnimator.js – data-driven animator spritesheetów (stany, klatki, przejścia)
 ├── support.js        – wygenerowany runtime DC (nie edytować ręcznie)
-└── layers/           – grafika: warstwy paralaksy + spritesheety postaci i wrogów
+├── layers/           – grafika: warstwy paralaksy + spritesheety postaci i wrogów (w tym duch)
+└── sfx/              – efekty dźwiękowe (mp3)
 ```
 
 ## Wydajność
