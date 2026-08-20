@@ -175,6 +175,40 @@ function layerScale(img, w, h, lift) {
   return Math.max(cover, (h + 2 * lift + 2) / img.height);
 }
 
+// Krótkie SFX odpalane na klonach <audio> — clone pozwala nakładać się
+// dźwiękom (np. seria stompów), zamiast ucinać poprzedni przy każdym play().
+class AudioManager {
+  constructor() {
+    this.sounds = {};
+    const files = {
+      jump: 'sfx/jump.mp3',
+      stompKill: 'sfx/stomp-kill.mp3',
+      scoreTick: 'sfx/score-tick.mp3',
+      playerHit: 'sfx/player-hit.mp3',
+      ghostHit: 'sfx/ghost-hit.mp3',
+      combo: 'sfx/combo.mp3',
+      bestCombo: 'sfx/best-combo.mp3',
+      gameStart: 'sfx/game-start.mp3',
+      gameOver: 'sfx/game-over.mp3',
+    };
+    Object.entries(files).forEach(([key, src]) => {
+      const a = new Audio(src);
+      a.preload = 'auto';
+      this.sounds[key] = a;
+    });
+  }
+
+  play(key, volume = 1) {
+    const base = this.sounds[key];
+    if (!base) return;
+    const node = base.cloneNode(true);
+    node.volume = volume;
+    // Przeglądarka może odrzucić play() poza gestem użytkownika — nie ma to
+    // wpływu na rozgrywkę, więc błąd po prostu ignorujemy.
+    node.play().catch(() => {});
+  }
+}
+
 class Component extends DCLogic {
   constructor(props) {
     super(props);
@@ -196,6 +230,7 @@ class Component extends DCLogic {
     // Prędkość przewijania tła (parallax) — płynnie dogania docelową prędkość
     // (patrz tick()), żeby game over hamował scenę zamiast ciąć ją nagle.
     this.bgSpeed = 40;
+    this.audio = new AudioManager();
   }
 
   componentDidMount() {
@@ -333,6 +368,10 @@ class Component extends DCLogic {
     this.enemyDeadSheet.src = 'layers/enemy-dead.png';
     this.enemyDeadFrameCount = 6;
 
+    this.ghostSheet = new Image();
+    this.ghostSheet.src = 'layers/enemy_ghost_3.png';
+    this.ghostFrameCount = 6;
+
     this.resizeCanvas();
     this.raf = requestAnimationFrame(this.tick);
   }
@@ -391,6 +430,7 @@ class Component extends DCLogic {
     if (this.animator) this.animator.reset('idle');
     if (this.fx) this.fx.reset();
     this.setState({ gameState: 'playing', lives: 3, score: 0, distance: 0, kills: 0, combo: 0, bestCombo: 1, photoMode: false });
+    this.audio.play('gameStart');
   };
 
   // Tryb foto: pauzuje świat gry i chowa HUD — czysty kadr do zrzutów
@@ -453,6 +493,7 @@ class Component extends DCLogic {
         const groundY = this.computeGroundY(this.viewW, this.viewH, p.x);
         this.fx.emitJump(p.x, groundY);
       }
+      this.audio.play('jump');
     }
   }
 
@@ -534,7 +575,7 @@ class Component extends DCLogic {
 
   spawnGhost(w, groundY) {
     const flyHeight = 90 + Math.random() * 70;
-    this.enemies.push({ type: 'ghost', x: w + 60, y: groundY - flyHeight, w: 50, h: 60, alive: true, dead: false, deadTimer: 0, hit: false, hitTimer: 0, bob: Math.random() * Math.PI * 2, wispTimer: 0 });
+    this.enemies.push({ type: 'ghost', x: w + 60, y: groundY - flyHeight, w: 50, h: 60, alive: true, dead: false, deadTimer: 0, hit: false, hitTimer: 0, bob: Math.random() * Math.PI * 2, wispTimer: 0, frame: 0, frameTimer: 0 });
   }
 
   // Pokonanie wroga: punkty rosną z serią, świat dostaje "cios" (hit-stop,
@@ -554,17 +595,23 @@ class Component extends DCLogic {
     this.fx.addHitStop(0.06);
     this.fx.flash(0.06, '255, 220, 140');
     this.fx.spawnPopup(en.x, enY - en.h - 24, '+' + points, '#ffd670', 24);
+    this.audio.play('stompKill');
+    this.audio.play('scoreTick', 0.6);
     if (combo >= 2) {
       this.fx.spawnPopup(en.x, enY - en.h - 56, 'SERIA x' + combo + '!', '#ff9d3b', 20 + Math.min(10, combo * 2));
       this.fx.addTrauma(0.06 * Math.min(4, combo));
+      this.audio.play('combo');
     }
 
-    this.setState(s => ({
-      score: s.score + points,
-      kills: s.kills + 1,
-      combo,
-      bestCombo: Math.max(s.bestCombo, combo),
-    }));
+    this.setState(s => {
+      if (combo > s.bestCombo) this.audio.play('bestCombo');
+      return {
+        score: s.score + points,
+        kills: s.kills + 1,
+        combo,
+        bestCombo: Math.max(s.bestCombo, combo),
+      };
+    });
   }
 
   // Trafienie gracza: czerwony rozbłysk, mocny shake, hit-stop; przy utracie
@@ -580,6 +627,7 @@ class Component extends DCLogic {
     this.fx.addTrauma(0.55);
     this.fx.addHitStop(0.11);
     this.fx.flash(0.55, '231, 76, 60');
+    this.audio.play(en.type === 'ghost' ? 'ghostHit' : 'playerHit');
 
     this.setState(s => {
       const lives = s.lives - 1;
@@ -590,6 +638,7 @@ class Component extends DCLogic {
         // animacja śmierci startuje dopiero po wylądowaniu na ziemi.
         if (p.onGround) this.animator.play('death', { force: true });
         else p.pendingDeath = true;
+        this.audio.play('gameOver');
         return { lives, gameState: 'gameover', combo: 0 };
       }
       this.animator.play('hit', { force: true });
@@ -698,6 +747,10 @@ class Component extends DCLogic {
         if (en.type === 'ground') {
           en.frameTimer += dt;
           if (en.frameTimer > 0.08) { en.frameTimer = 0; en.frame = (en.frame + 1) % this.enemyFrameCount; }
+        }
+        if (en.type === 'ghost') {
+          en.frameTimer += dt;
+          if (en.frameTimer > 0.1) { en.frameTimer = 0; en.frame = (en.frame + 1) % this.ghostFrameCount; }
         }
         if (en.hit) {
           en.hitTimer += dt;
@@ -869,31 +922,19 @@ class Component extends DCLogic {
     ctx.drawImage(this.enemySheet, en.frame * fw, 0, fw, fh, x - displayW / 2, yBase - displayH, displayW, displayH);
   }
 
-  // Placeholder ghost — swap for real art via layers/ghost.png later
   drawGhost(ctx, en) {
     const y = en.y + Math.sin(en.bob) * 12;
     const x = en.x;
-    const w = en.w, h = en.h;
+    const h = en.h;
     // Zimna poświata pod duchem — od razu czyta się jako "inny" typ wroga.
-    this.fx.drawGlow(ctx, x, y - h * 0.4, w * 2.6, en.dead ? Math.max(0, 1 - en.deadTimer / 0.4) * 0.5 : 0.5);
+    this.fx.drawGlow(ctx, x, y - h * 0.4, en.w * 2.6, en.dead ? Math.max(0, 1 - en.deadTimer / 0.4) * 0.5 : 0.5);
+    if (!this.ghostSheet || !this.ghostSheet.complete || !this.ghostSheet.naturalWidth) return;
+    const fw = this.ghostSheet.naturalWidth / this.ghostFrameCount;
+    const fh = this.ghostSheet.naturalHeight;
+    const displayH = 78, displayW = displayH * (fw / fh);
     ctx.save();
     if (en.dead) ctx.globalAlpha = Math.max(0, 1 - en.deadTimer / 0.4);
-    ctx.globalAlpha *= 0.85;
-    ctx.fillStyle = '#eaf2ff';
-    ctx.beginPath();
-    ctx.arc(x, y - h * 0.55, w * 0.5, Math.PI, 0);
-    ctx.lineTo(x + w * 0.5, y);
-    for (let i = 0; i < 4; i++) {
-      const wx = x + w * 0.5 - (i + 0.5) * (w / 4);
-      const wy = i % 2 === 0 ? y : y - h * 0.18;
-      ctx.lineTo(wx, wy);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha *= 0.9;
-    ctx.fillStyle = '#2b1c0e';
-    ctx.beginPath(); ctx.arc(x - w * 0.16, y - h * 0.58, 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(x + w * 0.16, y - h * 0.58, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.drawImage(this.ghostSheet, en.frame * fw, 0, fw, fh, x - displayW / 2, y - displayH, displayW, displayH);
     ctx.restore();
   }
 
