@@ -17,7 +17,7 @@
 <body>
 <x-dc>
 <helmet>
-<title>Leśny Ninja: Bieg</title>
+<title>JS Ninja</title>
 <style>
   @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
   @keyframes pulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.15) } }
@@ -72,7 +72,7 @@
 <script src="./spriteAnimator.js"></script>
 <script src="./effects.js"></script>
 </helmet>
-<div class="fx-stage" style="position:relative;overflow:hidden;background:#1a1410;font-family:'Trebuchet MS',sans-serif;user-select:none;touch-action:none" tabIndex="0" ref="{{ stageRef }}" onClick="{{ onStageClick }}" onTouchStart="{{ onStageTouchStart }}" onTouchMove="{{ onStageTouchMove }}" onTouchEnd="{{ onStageTouchEnd }}">
+<div class="fx-stage" style="position:relative;overflow:hidden;background:#1a1410;font-family:'Trebuchet MS',sans-serif;user-select:none;touch-action:none" tabIndex="0" ref="{{ stageRef }}" onClick="{{ onStageClick }}" onMouseDown="{{ onStageMouseDown }}" onTouchStart="{{ onStageTouchStart }}" onTouchMove="{{ onStageTouchMove }}" onTouchEnd="{{ onStageTouchEnd }}">
   <canvas ref="{{ canvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block;animation:fadeIn 0.6s ease"></canvas>
 
   <sc-if value="{{ hudVisible }}">
@@ -94,7 +94,7 @@
   <sc-if value="{{ isReady }}">
     <div class="fx-screen" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%, rgba(24,16,8,0.45), rgba(8,5,3,0.82));gap:clamp(12px,3vmin,22px);color:#fff2dc;text-align:center;animation:fadeIn 0.5s ease;padding:16px;box-sizing:border-box">
       <div class="fx-tagline" style="font-size:clamp(11px,2.6vmin,15px);letter-spacing:0.35em;text-transform:uppercase;opacity:0.7;animation:slideUp 0.6s ease both">Przygoda w lesie cieni</div>
-      <div class="fx-title" style="font-size:clamp(30px,9vmin,56px);font-weight:800;letter-spacing:0.01em;animation:slideUp 0.6s 0.08s ease both;line-height:1.1">Leśny Ninja: Bieg</div>
+      <div class="fx-title" style="font-size:clamp(30px,9vmin,56px);font-weight:800;letter-spacing:0.01em;animation:slideUp 0.6s 0.08s ease both;line-height:1.1">JS Ninja</div>
       <div style="display:flex;gap:clamp(8px,2vmin,12px);flex-wrap:wrap;justify-content:center;animation:slideUp 0.6s 0.16s ease both;max-width:92vw">
         <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">📱 &nbsp;Dotknij połowy ekranu — bieg</div>
         <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">👆 &nbsp;Machnięcie w górę — skok</div>
@@ -128,14 +128,14 @@
   </sc-if>
 
   <sc-if value="{{ photoBtnVisible }}">
-    <button class="om-touch-btn" onClick="{{ onPhotoClick }}" onTouchStart="{{ onPhotoTouchStart }}" onTouchEnd="{{ onPhotoTouchEnd }}" title="Tryb foto (P)" style="position:absolute;right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;border:1px solid rgba(255,226,170,0.25);background:rgba(16,10,6,0.55);color:#fff2dc;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,0.4)" style-hover="background:rgba(40,26,12,0.7);transform:scale(1.08)">📷</button>
+    <button class="om-touch-btn" onClick="{{ onPhotoClick }}" onMouseDown="{{ onPhotoMouseDown }}" onTouchStart="{{ onPhotoTouchStart }}" onTouchEnd="{{ onPhotoTouchEnd }}" title="Tryb foto (P)" style="position:absolute;right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;border:1px solid rgba(255,226,170,0.25);background:rgba(16,10,6,0.55);color:#fff2dc;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,0.4)" style-hover="background:rgba(40,26,12,0.7);transform:scale(1.08)">📷</button>
   </sc-if>
 
   <sc-if value="{{ isPhoto }}">
     <div style="position:absolute;top:0;left:0;right:0;height:clamp(24px,6vh,60px);background:#000;animation:barTop 0.45s ease both;pointer-events:none"></div>
     <div style="position:absolute;bottom:0;left:0;right:0;height:clamp(24px,6vh,60px);background:#000;animation:barBottom 0.45s ease both;pointer-events:none"></div>
     <div style="position:absolute;left:0;right:0;bottom:calc(clamp(24px,6vh,60px) + 14px);text-align:center;color:#fff2dc;font-size:clamp(12px,3vw,14px);letter-spacing:0.06em;text-shadow:0 2px 6px rgba(0,0,0,0.8);animation:hintFade 3.2s ease both;pointer-events:none">Dotknij ekranu lub naciśnij P, aby wrócić do gry</div>
-    <div style="position:absolute;left:calc(14px + env(safe-area-inset-left));top:calc(clamp(24px,6vh,60px) + 12px);color:#fff2dc;opacity:0.55;font-size:clamp(11px,2.8vw,13px);font-weight:700;letter-spacing:0.08em;text-shadow:0 2px 6px rgba(0,0,0,0.8);pointer-events:none">🥷 LEŚNY NINJA: BIEG</div>
+    <div style="position:absolute;left:calc(14px + env(safe-area-inset-left));top:calc(clamp(24px,6vh,60px) + 12px);color:#fff2dc;opacity:0.55;font-size:clamp(11px,2.8vw,13px);font-weight:700;letter-spacing:0.08em;text-shadow:0 2px 6px rgba(0,0,0,0.8);pointer-events:none">🥷 JS NINJA</div>
   </sc-if>
 
   <!-- Ostatnie dziecko sceny: pozostałe nakładki nie ustawiają z-index, więc
@@ -184,11 +184,18 @@ class Component extends DCLogic {
     this.layers = [];
     this.enemies = [];
     this.keys = { left: false, right: false };
+    // Poświata w powietrzu za graczem — startGame() ją resetuje, ale tick()
+    // odlicza jej zanikanie w każdej klatce (także przed pierwszym Start),
+    // więc musi istnieć od razu.
+    this.trail = [];
     this.t0 = performance.now();
     this.lastTime = this.t0;
     // Wymiary sceny w px CSS — mierzone z elementu, nie z window (patrz resizeCanvas).
     this.viewW = 0;
     this.viewH = 0;
+    // Prędkość przewijania tła (parallax) — płynnie dogania docelową prędkość
+    // (patrz tick()), żeby game over hamował scenę zamiast ciąć ją nagle.
+    this.bgSpeed = 40;
   }
 
   componentDidMount() {
@@ -292,8 +299,8 @@ class Component extends DCLogic {
     // na miejscu. Ten sam lift odejmuje computeGroundY, żeby gracz, wrogowie
     // i efekty trzymały się widocznej powierzchni.
     const configs = [
-      { path: 'layers/sky.png',       mult: 0.05, blend: 'source-over', mirrorTile: true },
-      { path: 'layers/mid.png',       mult: 0.3,  blend: 'source-over', mirrorTile: true },
+      { path: 'layers/sky.png',       mult: 0.05, blend: 'source-over', mirrorTile: false },
+      { path: 'layers/mid.png',       mult: 0.3,  blend: 'source-over', mirrorTile: false },
       { path: 'layers/platforms.png', mult: 1.0,  blend: 'source-over', mirrorTile: true, liftsWithGround: true },
       { path: 'layers/foreground-props.png', mult: 1.4, blend: 'source-over', mirrorTile: false },
       { path: 'layers/frame.png',     mult: 1.3,  blend: 'source-over', mirrorTile: false },
@@ -321,6 +328,10 @@ class Component extends DCLogic {
     this.enemyHitSheet = new Image();
     this.enemyHitSheet.src = 'layers/enemy-hit.png';
     this.enemyHitFrameCount = 4;
+
+    this.enemyDeadSheet = new Image();
+    this.enemyDeadSheet.src = 'layers/enemy-dead.png';
+    this.enemyDeadFrameCount = 6;
 
     this.resizeCanvas();
     this.raf = requestAnimationFrame(this.tick);
@@ -404,6 +415,8 @@ class Component extends DCLogic {
     this.togglePhotoMode();
   };
   onPhotoTouchStart = (e) => { e.stopPropagation(); };
+  // Klik myszką na 📷 nie może uruchomić skoku (scena nasłuchuje mousedown na całej scenie).
+  onPhotoMouseDown = (e) => { e.stopPropagation(); };
   onPhotoTouchEnd = (e) => {
     e.stopPropagation();
     if (e.cancelable) e.preventDefault(); // blokuje emulowany click po dotyku
@@ -417,6 +430,16 @@ class Component extends DCLogic {
     // i od razu wyszedłby z trybu foto — ignorujemy go w krótkim oknie.
     if (performance.now() - (this.photoTouchAt || 0) < 700) return;
     this.togglePhotoMode();
+  };
+
+  // Skok myszką (LPM na scenie) — dla graczy desktopowych bez klawiatury pod ręką.
+  // tryJump() sam odrzuca wywołania poza stanem 'playing'/tryb foto/blokadę pionu.
+  onStageMouseDown = (e) => {
+    if (e.button !== 0) return;
+    // Część przeglądarek mobilnych mimo touch-action:none wysyła emulowany
+    // mousedown po dotyku — ignorujemy go w krótkim oknie po realnym dotyku.
+    if (performance.now() - (this.lastTouchAt || 0) < 700) return;
+    this.tryJump();
   };
 
   tryJump() {
@@ -440,6 +463,7 @@ class Component extends DCLogic {
   onJump = (e) => { if (e.cancelable) e.preventDefault(); this.tryJump(); };
 
   onStageTouchStart = (e) => {
+    this.lastTouchAt = performance.now();
     if (this.state.photoMode || this.state.portraitBlock) return;
     const t = e.touches[0];
     this.swipe = { x: t.clientX, y: t.clientY, t: performance.now(), moved: false };
@@ -505,12 +529,12 @@ class Component extends DCLogic {
   }
 
   spawnEnemy(w, groundY) {
-    this.enemies.push({ type: 'ground', x: w + 60, y: groundY, w: 46, h: 58, alive: true, dead: false, deadTimer: 0, bob: Math.random() * Math.PI * 2, frame: 0, frameTimer: 0 });
+    this.enemies.push({ type: 'ground', x: w + 60, y: groundY, w: 46, h: 58, alive: true, dead: false, deadTimer: 0, hit: false, hitTimer: 0, bob: Math.random() * Math.PI * 2, frame: 0, frameTimer: 0 });
   }
 
   spawnGhost(w, groundY) {
     const flyHeight = 90 + Math.random() * 70;
-    this.enemies.push({ type: 'ghost', x: w + 60, y: groundY - flyHeight, w: 50, h: 60, alive: true, dead: false, deadTimer: 0, bob: Math.random() * Math.PI * 2, wispTimer: 0 });
+    this.enemies.push({ type: 'ghost', x: w + 60, y: groundY - flyHeight, w: 50, h: 60, alive: true, dead: false, deadTimer: 0, hit: false, hitTimer: 0, bob: Math.random() * Math.PI * 2, wispTimer: 0 });
   }
 
   // Pokonanie wroga: punkty rosną z serią, świat dostaje "cios" (hit-stop,
@@ -544,10 +568,11 @@ class Component extends DCLogic {
   }
 
   // Trafienie gracza: czerwony rozbłysk, mocny shake, hit-stop; przy utracie
-  // ostatniego życia — slow-motion i przejście do ekranu końca.
+  // ostatniego życia — slow-motion i przejście do ekranu końca. Wróg nie
+  // ginie — odgrywa animację trafienia i wraca do normalnej formy, biegnąc dalej.
   onPlayerHit(en, enY) {
     const p = this.player;
-    en.alive = false; en.dead = true; en.deadTimer = 0;
+    en.hit = true; en.hitTimer = 0;
     p.invuln = 1.1;
     this.comboTimer = 0;
 
@@ -559,9 +584,12 @@ class Component extends DCLogic {
     this.setState(s => {
       const lives = s.lives - 1;
       if (lives <= 0) {
-        this.animator.play('death', { force: true });
         this.fx.addSlowMo(1.1, 0.3);
         this.fx.addTrauma(0.4);
+        // W powietrzu: dokańczamy upadek (grawitacja leci dalej w tick()),
+        // animacja śmierci startuje dopiero po wylądowaniu na ziemi.
+        if (p.onGround) this.animator.play('death', { force: true });
+        else p.pendingDeath = true;
         return { lives, gameState: 'gameover', combo: 0 };
       }
       this.animator.play('hit', { force: true });
@@ -638,10 +666,6 @@ class Component extends DCLogic {
           if (this.trail.length > 4) this.trail.shift();
         }
       }
-      for (let i = this.trail.length - 1; i >= 0; i--) {
-        this.trail[i].life -= dt;
-        if (this.trail[i].life <= 0) this.trail.splice(i, 1);
-      }
 
       // Okno serii — po 2 s bez trafienia licznik wraca do zera.
       if (this.comboTimer > 0) {
@@ -675,6 +699,10 @@ class Component extends DCLogic {
           en.frameTimer += dt;
           if (en.frameTimer > 0.08) { en.frameTimer = 0; en.frame = (en.frame + 1) % this.enemyFrameCount; }
         }
+        if (en.hit) {
+          en.hitTimer += dt;
+          if (en.hitTimer > 0.4) en.hit = false;
+        }
         const enY = en.type === 'ghost' ? en.y + Math.sin(en.bob) * 12 : en.y;
         // Duchy zostawiają za sobą zimną smużkę.
         if (en.type === 'ghost') {
@@ -696,12 +724,40 @@ class Component extends DCLogic {
 
       const distDelta = this.gameSpeed * dt;
       this.setState(s => ({ score: s.score + distDelta * 0.02, distance: s.distance + distDelta * 0.02 }));
-    } else if (gameOver && this.animator && !this.animator.finished) {
-      this.animator.update(dt * 1000);
+    } else if (gameOver && this.player) {
+      const p = this.player;
+      if (p.pendingDeath) {
+        // Gracz tracił ostatnie życie w powietrzu — dokańczamy spadanie,
+        // animacja śmierci odpala się dopiero po dotknięciu ziemi.
+        p.vy += 2200 * dt;
+        p.y += p.vy * dt;
+        if (p.y >= 0) {
+          p.y = 0; p.vy = 0; p.onGround = true;
+          p.pendingDeath = false;
+          this.animator.play('death', { force: true });
+        }
+      }
+      if (this.animator && !this.animator.finished) {
+        this.animator.update(dt * 1000);
+      }
     }
 
+    // Poświata w powietrzu musi dogasać niezależnie od stanu gry — inaczej
+    // ostatnie klatki echa zostają zamrożone w powietrzu, gdy player spada
+    // do game over (widać "dwóch graczy" naraz).
+    for (let i = this.trail.length - 1; i >= 0; i--) {
+      this.trail[i].life -= dt;
+      if (this.trail[i].life <= 0) this.trail.splice(i, 1);
+    }
+
+    // Prędkość tła płynnie dogania cel — przy game over hamuje z pełnego
+    // rozpędu do zera (pełny bezruch) zamiast ciąć ją w jednej klatce;
+    // na ekranie startowym zostaje wolny ambient.
+    const targetBgSpeed = playing ? this.gameSpeed : (gameOver ? 0 : 40);
+    this.bgSpeed += (targetBgSpeed - this.bgSpeed) * (1 - Math.exp(-dt / 0.9));
+
     // Efekty żyją zawsze (także na ekranie startowym — ambient buduje klimat).
-    this.fx.update(dt, { w, h, gameSpeed: playing ? this.gameSpeed : 40, groundY, playing });
+    this.fx.update(dt, { w, h, gameSpeed: this.bgSpeed, groundY, playing });
 
     ctx.clearRect(0, 0, w, h);
 
@@ -709,7 +765,7 @@ class Component extends DCLogic {
     ctx.save();
     ctx.translate(this.fx.shakeX, this.fx.shakeY);
 
-    const bgScrollMult = playing ? this.gameSpeed : 40;
+    const bgScrollMult = this.bgSpeed;
     this.layers.forEach((layer) => {
       const img = layer.img;
       const lift = layer.liftsWithGround ? h * GROUND_LIFT_RATIO : 0;
@@ -723,6 +779,7 @@ class Component extends DCLogic {
       layer.scrollX -= layer.mult * bgScrollMult * dt;
       let x = layer.scrollX % drawW;
       if (x > 0) x -= drawW;
+      x = Math.round(x);
       const baseIndex = Math.round((layer.scrollX - x) / drawW);
       let n = 0;
       const isForeground = layer.mult > 1.0;
@@ -777,16 +834,29 @@ class Component extends DCLogic {
   drawEnemy(ctx, en, groundY) {
     if (en.type === 'ghost') { this.drawGhost(ctx, en); return; }
     if (en.dead) {
+      // Naskoczenie z góry: pełna animacja zgonu, wróg znika dopiero po jej
+      // zakończeniu (bez przenikania w trakcie odtwarzania klatek).
+      if (!this.enemyDeadSheet || !this.enemyDeadSheet.complete || !this.enemyDeadSheet.naturalWidth) return;
+      const fw = this.enemyDeadSheet.naturalWidth / this.enemyDeadFrameCount;
+      const fh = this.enemyDeadSheet.naturalHeight;
+      const displayH = 84, displayW = displayH * (fw / fh);
+      const x = en.x, yBase = en.y + displayH * 0.22 + 15;
+      const frame = Math.min(this.enemyDeadFrameCount - 1, Math.floor((en.deadTimer / 0.4) * this.enemyDeadFrameCount));
+      ctx.drawImage(this.enemyDeadSheet, frame * fw, 0, fw, fh, x - displayW / 2, yBase - displayH, displayW, displayH);
+      return;
+    }
+    if (en.hit) {
+      // Zderzenie z boku: wróg odgrywa animację trafienia, po czym wraca do
+      // normalnej formy i biegnie dalej (nie ginie).
       if (!this.enemyHitSheet || !this.enemyHitSheet.complete || !this.enemyHitSheet.naturalWidth) return;
       const fw = this.enemyHitSheet.naturalWidth / this.enemyHitFrameCount;
       const fh = this.enemyHitSheet.naturalHeight;
+      const bob = Math.sin(en.bob) * 3;
       const displayH = 84, displayW = displayH * (fw / fh);
-      const x = en.x, yBase = en.y + displayH * 0.22 + 15;
-      const frame = Math.min(this.enemyHitFrameCount - 1, Math.floor((en.deadTimer / 0.4) * this.enemyHitFrameCount));
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, 1 - en.deadTimer / 0.4);
+      const x = en.x, yBase = en.y + bob + displayH * 0.22 + 15;
+      this.fx.drawShadow(ctx, x, en.y + 8, displayW * 0.34, 0);
+      const frame = Math.min(this.enemyHitFrameCount - 1, Math.floor((en.hitTimer / 0.4) * this.enemyHitFrameCount));
       ctx.drawImage(this.enemyHitSheet, frame * fw, 0, fw, fh, x - displayW / 2, yBase - displayH, displayW, displayH);
-      ctx.restore();
       return;
     }
     if (!this.enemySheet || !this.enemySheet.complete || !this.enemySheet.naturalWidth) return;
@@ -850,7 +920,9 @@ class Component extends DCLogic {
     const drawX = p.x, drawY = groundY + p.y + displayH * 0.22;
     this.fx.drawShadow(ctx, p.x, groundY, displayW * 0.28, p.y);
     ctx.save();
-    if (p.invuln > 0 && Math.floor(p.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.4;
+    // invuln przestaje odliczać poza stanem 'playing' (patrz tick()) — bez tej
+    // blokady player zostawałby na stałe przygaszony po śmierci.
+    if (this.state.gameState === 'playing' && p.invuln > 0 && Math.floor(p.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.4;
     ctx.translate(drawX, drawY);
     // Squash & stretch skaluje sylwetkę wokół punktu przy stopach.
     ctx.scale((p.facingRight ? 1 : -1) * (p.sx || 1), p.sy || 1);
@@ -887,9 +959,11 @@ class Component extends DCLogic {
       onRightDown: this.onRightDown, onRightUp: this.onRightUp,
       onJump: this.onJump,
       onPhotoClick: this.onPhotoClick,
+      onPhotoMouseDown: this.onPhotoMouseDown,
       onPhotoTouchStart: this.onPhotoTouchStart,
       onPhotoTouchEnd: this.onPhotoTouchEnd,
       onStageClick: this.onStageClick,
+      onStageMouseDown: this.onStageMouseDown,
       onStageTouchStart: this.onStageTouchStart,
       onStageTouchMove: this.onStageTouchMove,
       onStageTouchEnd: this.onStageTouchEnd,
