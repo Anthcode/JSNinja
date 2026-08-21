@@ -64,6 +64,7 @@ const P_WISP = 3;    // zimna poświata za duchami
 const P_EMBER = 4;   // drobinki po trafieniu gracza (czerwone)
 const P_STREAK = 5;  // poziome smugi prędkości (rysowane jako linie)
 const P_PUFF = 6;    // biały obłoczek skoku
+const P_SPEED = 7;   // podłużna smuga prędkości — poświata ninja dasha
 
 const MAX_PARTICLES = 512;
 const MAX_POPUPS = 16;
@@ -142,6 +143,7 @@ class FXSystem {
             makeGlowSprite(18, 255, 110, 80, 0.9),     // P_EMBER
             null,                                       // P_STREAK (rysowane linią)
             makeGlowSprite(30, 255, 250, 235, 0.6),    // P_PUFF
+            null,                                       // P_SPEED (rysowane linią, jak P_STREAK)
         ];
         this.leafSprites = [
             makeLeafSprite('#7a9c4f', '#5d7a3a'),
@@ -377,6 +379,32 @@ class FXSystem {
             0.5 + Math.random() * 0.3, 8 + Math.random() * 10, -40, 0.95);
     }
 
+    // Smuga prędkości za ninja w trakcie dasha. Wołana co klatkę z aktualnej
+    // pozycji gracza (nie tylko raz na starcie zrywu) — przy 1400 px/s
+    // jednorazowy wybuch cząstek zostaje w tyle za graczem już po kilku
+    // klatkach i wygląda jak oderwany od postaci obłoczek.
+    emitDashTrail(x, y, dir) {
+        for (let i = 0; i < 5; i++) {
+            // Niewielka prędkość wsteczna — cząstki mają tylko zaznaczyć
+            // ślad tuż za graczem, nie odjechać od niego w trakcie życia.
+            this._emit(P_SPEED, x, y + (Math.random() - 0.5) * 20,
+                -dir * (60 + Math.random() * 120), (Math.random() - 0.5) * 40,
+                0.2 + Math.random() * 0.1, 6 + Math.random() * 5, 0, 0.9);
+        }
+    }
+
+    // Lodowoniebieska eksplozja iskier — dash-kill ducha (analogiczna do
+    // emitStompBurst, inny kolor pierścienia).
+    emitDashBurst(x, y) {
+        for (let i = 0; i < 14; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const sp = 80 + Math.random() * 220;
+            this._emit(P_SPARK, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 60,
+                0.35 + Math.random() * 0.35, 3 + Math.random() * 5, 400, 0.93);
+        }
+        this.spawnRing(x, y, '140,200,255');
+    }
+
     spawnRing(x, y, color) {
         for (const r of this.rings) {
             if (r.active) continue;
@@ -504,6 +532,22 @@ class FXSystem {
                 ctx.globalAlpha = k * 0.14;
                 ctx.fillStyle = '#fff6e0';
                 ctx.fillRect(p.x, p.y, p.size, 2);
+            } else if (p.type === P_SPEED) {
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.globalAlpha = Math.min(1, k * 1.3);
+                ctx.strokeStyle = 'rgba(180, 220, 255, 1)';
+                ctx.lineWidth = p.size;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                // Długość smugi rysujemy niezależnie od faktycznej (celowo
+                // małej — patrz emitDashTrail) prędkości dryfu, żeby ślad
+                // czytał się jako kreska, nie okrągła plamka.
+                const len = 22 + p.size * 1.5;
+                const vlen = Math.hypot(p.vx, p.vy) || 1;
+                ctx.lineTo(p.x - (p.vx / vlen) * len, p.y - (p.vy / vlen) * len);
+                ctx.stroke();
+                ctx.globalCompositeOperation = 'source-over';
             } else {
                 const spr = this.sprites[p.type];
                 const additive = p.type === P_SPARK || p.type === P_EMBER || p.type === P_WISP;

@@ -12,19 +12,28 @@ z naciskiem na **efekty wizualne** i **stałe 60 fps**.
 | --- | --- | --- |
 | Ruch lewo / prawo | strzałki lub A / D | przytrzymanie lewej / prawej połowy ekranu |
 | Skok | spacja, W lub strzałka w górę | machnięcie w górę |
+| Ninja Dash (w powietrzu) | Shift lub E | machnięcie w bok |
 
 Wskocz wrogowi na głowę, aby go pokonać — kolejne trafienia w krótkim czasie budują
 **serię** i mnożą punkty. Zderzenie z boku kosztuje życie.
+
+**Ninja Dash** to szybki zryw w powietrzu w kierunku ruchu ninja (0,14 s, 1400 px/s,
+grawitacja na ten czas zamrożona). Podczas dasha ninja przelatuje przez duchy i je
+zabija, a wrogów naziemnych traktuje jak stomp (odbicie w górę, dash się przerywa).
+Jedno użycie na pobyt w powietrzu — dash odnawia się przy lądowaniu albo przy udanym
+pokonaniu wroga (stomp lub dash-kill), co pozwala łączyć akcje w combo (stomp → dash →
+stomp).
 
 ## Efekty wizualne („juice”)
 
 - **Cząsteczki** (pula 512, zero alokacji w pętli gry): kurz spod stóp i przy lądowaniu,
   obłoczek skoku, złote iskry przy pokonaniu wroga, czerwone drobinki przy trafieniu,
-  liście niesione wiatrem, zimne smużki za duchami, smugi prędkości przy rozpędzonej grze.
+  liście niesione wiatrem, zimne smużki za duchami, smugi prędkości przy rozpędzonej grze,
+  niebieska smuga i lodowoniebieska eksplozja iskier przy Ninja Dashu.
 - **Kamera**: screen shake sterowany „traumą” (kwadratowo — małe uderzenia są subtelne),
   hit-stop przy trafieniach, slow-motion przy utracie ostatniego życia.
 - **Postać**: squash & stretch przy skoku i lądowaniu, echo sylwetki w powietrzu,
-  miękkie cienie pod postaciami.
+  miękkie cienie pod postaciami, poświata/ghosting sylwetki podczas Ninja Dasha.
 - **Atmosfera**: promienie światła przez las, świetliki przy ziemi, dwie wstęgi mgły,
   winieta z ciepłą korekcją koloru, fale uderzeniowe i pływające napisy (+10, SERIA x3!).
 - **UI**: szklane panele HUD, licznik serii, animowane ekrany startu i końca gry.
