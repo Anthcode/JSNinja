@@ -764,6 +764,9 @@ class Component extends DCLogic {
         } else {
           p.x += p.dashDir * 1400 * dt;
           p.x = Math.max(p.minX, Math.min(p.maxX, p.x));
+          // Smuga ciągnie się co klatkę za aktualną pozycją, żeby nie
+          // odklejała się od gracza pędzącego z prędkością dasha.
+          this.fx.emitDashTrail(p.x, groundY + p.y - 65, p.dashDir);
         }
       }
 

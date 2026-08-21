@@ -379,13 +379,17 @@ class FXSystem {
             0.5 + Math.random() * 0.3, 8 + Math.random() * 10, -40, 0.95);
     }
 
-    // Smuga prędkości za ninja w trakcie dasha — ciągnie się w kierunku
-    // przeciwnym do lotu.
+    // Smuga prędkości za ninja w trakcie dasha. Wołana co klatkę z aktualnej
+    // pozycji gracza (nie tylko raz na starcie zrywu) — przy 1400 px/s
+    // jednorazowy wybuch cząstek zostaje w tyle za graczem już po kilku
+    // klatkach i wygląda jak oderwany od postaci obłoczek.
     emitDashTrail(x, y, dir) {
-        for (let i = 0; i < 12; i++) {
-            this._emit(P_SPEED, x - dir * (i * 8), y + (Math.random() - 0.5) * 30,
-                -dir * (200 + Math.random() * 300), (Math.random() - 0.5) * 60,
-                0.25 + Math.random() * 0.15, 2 + Math.random() * 3, 0, 0.92);
+        for (let i = 0; i < 5; i++) {
+            // Niewielka prędkość wsteczna — cząstki mają tylko zaznaczyć
+            // ślad tuż za graczem, nie odjechać od niego w trakcie życia.
+            this._emit(P_SPEED, x, y + (Math.random() - 0.5) * 20,
+                -dir * (60 + Math.random() * 120), (Math.random() - 0.5) * 40,
+                0.2 + Math.random() * 0.1, 6 + Math.random() * 5, 0, 0.9);
         }
     }
 
@@ -530,13 +534,18 @@ class FXSystem {
                 ctx.fillRect(p.x, p.y, p.size, 2);
             } else if (p.type === P_SPEED) {
                 ctx.globalCompositeOperation = 'lighter';
-                ctx.globalAlpha = k * 0.8;
+                ctx.globalAlpha = Math.min(1, k * 1.3);
                 ctx.strokeStyle = 'rgba(180, 220, 255, 1)';
                 ctx.lineWidth = p.size;
                 ctx.lineCap = 'round';
                 ctx.beginPath();
                 ctx.moveTo(p.x, p.y);
-                ctx.lineTo(p.x - p.vx * 0.06, p.y - p.vy * 0.06);
+                // Długość smugi rysujemy niezależnie od faktycznej (celowo
+                // małej — patrz emitDashTrail) prędkości dryfu, żeby ślad
+                // czytał się jako kreska, nie okrągła plamka.
+                const len = 22 + p.size * 1.5;
+                const vlen = Math.hypot(p.vx, p.vy) || 1;
+                ctx.lineTo(p.x - (p.vx / vlen) * len, p.y - (p.vy / vlen) * len);
                 ctx.stroke();
                 ctx.globalCompositeOperation = 'source-over';
             } else {
