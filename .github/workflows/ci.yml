@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Brak package-lock.json w repo (gra nie ma buildu, a zależności są tylko
+      # testowe i przypięte co do wersji), więc `npm install`, nie `npm ci`.
+      - name: Instalacja zależności testowych
+        run: npm install
+
+      # Playwright jest przypięty sztywno, bo każda jego wersja oczekuje
+      # konkretnego builda przeglądarki. `npm exec` pobiera build pasujący do
+      # zainstalowanej wersji.
+      - name: Instalacja Chromium dla Playwrighta
+        run: npm exec -- playwright install --with-deps chromium
+
+      # Sekundowa siatka bezpieczeństwa: łapie literówki bez wstawania przeglądarki.
+      - name: Sprawdzenie składni
+        run: npm run lint
+
+      # Testy mechaniki w prawdziwej przeglądarce (serwer statyczny wstaje
+      # wewnątrz harnessu, na losowym porcie).
+      - name: Testy mechaniki
+        run: npm test

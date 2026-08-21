@@ -77,6 +77,17 @@ game/
 └── sfx/              – efekty dźwiękowe (mp3)
 ```
 
+Sama gra nie ma kroku build ani zależności — `package.json` istnieje wyłącznie po to,
+żeby dało się odpalić testy.
+
+## Testy
+
+```bash
+npm install     # tylko zależności testowe
+npm run lint    # sprawdzenie składni, bez przeglądarki
+npm test        # mechanika w prawdziwym Chromium (~20 s)
+```
+
 ## Wydajność
 
 - Sprite'y cząsteczek i bufory pełnoekranowe (winieta, promienie, mgła) są
