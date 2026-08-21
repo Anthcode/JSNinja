@@ -762,8 +762,16 @@ class Component extends DCLogic {
         if (p.dashTimer <= 0) {
           p.dashing = false;
         } else {
-          p.x += p.dashDir * 1400 * dt;
-          p.x = Math.max(p.minX, Math.min(p.maxX, p.x));
+          const nextX = p.x + p.dashDir * 1400 * dt;
+          const clampedX = Math.max(p.minX, Math.min(p.maxX, nextX));
+          if (clampedX !== nextX) {
+            // Trafienie w granicę ekranu przerywa dash — bez tego postać
+            // zostawała przyklejona do krawędzi do końca zrywu (widoczne
+            // zwłaszcza na wąskich ekranach mobile, gdzie dash pokonuje
+            // niemal cały dostępny pas ruchu gracza w jedną stronę).
+            p.dashing = false;
+          }
+          p.x = clampedX;
           // Smuga ciągnie się co klatkę za aktualną pozycją, żeby nie
           // odklejała się od gracza pędzącego z prędkością dasha. Punkt
           // startowy przesunięty za plecy (przeciwnie do dashDir) — cząstki
