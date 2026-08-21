@@ -64,6 +64,7 @@ const P_WISP = 3;    // zimna poświata za duchami
 const P_EMBER = 4;   // drobinki po trafieniu gracza (czerwone)
 const P_STREAK = 5;  // poziome smugi prędkości (rysowane jako linie)
 const P_PUFF = 6;    // biały obłoczek skoku
+const P_SPEED = 7;   // podłużna smuga prędkości — poświata ninja dasha
 
 const MAX_PARTICLES = 512;
 const MAX_POPUPS = 16;
@@ -142,6 +143,7 @@ class FXSystem {
             makeGlowSprite(18, 255, 110, 80, 0.9),     // P_EMBER
             null,                                       // P_STREAK (rysowane linią)
             makeGlowSprite(30, 255, 250, 235, 0.6),    // P_PUFF
+            null,                                       // P_SPEED (rysowane linią, jak P_STREAK)
         ];
         this.leafSprites = [
             makeLeafSprite('#7a9c4f', '#5d7a3a'),
@@ -377,6 +379,28 @@ class FXSystem {
             0.5 + Math.random() * 0.3, 8 + Math.random() * 10, -40, 0.95);
     }
 
+    // Smuga prędkości za ninja w trakcie dasha — ciągnie się w kierunku
+    // przeciwnym do lotu.
+    emitDashTrail(x, y, dir) {
+        for (let i = 0; i < 12; i++) {
+            this._emit(P_SPEED, x - dir * (i * 8), y + (Math.random() - 0.5) * 30,
+                -dir * (200 + Math.random() * 300), (Math.random() - 0.5) * 60,
+                0.25 + Math.random() * 0.15, 2 + Math.random() * 3, 0, 0.92);
+        }
+    }
+
+    // Lodowoniebieska eksplozja iskier — dash-kill ducha (analogiczna do
+    // emitStompBurst, inny kolor pierścienia).
+    emitDashBurst(x, y) {
+        for (let i = 0; i < 14; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const sp = 80 + Math.random() * 220;
+            this._emit(P_SPARK, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 60,
+                0.35 + Math.random() * 0.35, 3 + Math.random() * 5, 400, 0.93);
+        }
+        this.spawnRing(x, y, '140,200,255');
+    }
+
     spawnRing(x, y, color) {
         for (const r of this.rings) {
             if (r.active) continue;
@@ -504,6 +528,17 @@ class FXSystem {
                 ctx.globalAlpha = k * 0.14;
                 ctx.fillStyle = '#fff6e0';
                 ctx.fillRect(p.x, p.y, p.size, 2);
+            } else if (p.type === P_SPEED) {
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.globalAlpha = k * 0.8;
+                ctx.strokeStyle = 'rgba(180, 220, 255, 1)';
+                ctx.lineWidth = p.size;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(p.x - p.vx * 0.06, p.y - p.vy * 0.06);
+                ctx.stroke();
+                ctx.globalCompositeOperation = 'source-over';
             } else {
                 const spr = this.sprites[p.type];
                 const additive = p.type === P_SPARK || p.type === P_EMBER || p.type === P_WISP;
