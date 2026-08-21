@@ -56,6 +56,42 @@ function makeLeafSprite(fill, vein) {
     return c;
 }
 
+// Gwiazdka ninja (shuriken) — cztery ramiona, stalowy gradient z zimnym
+// obrysem. Prerenderowana raz: w pętli gry to jeden drawImage z obrotem,
+// bez liczenia ścieżki co klatkę.
+function makeShurikenSprite(size) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const ctx = c.getContext('2d');
+    const r = size / 2, inner = size * 0.17, outer = size * 0.47;
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+        const rad = i % 2 === 0 ? outer : inner;
+        const x = r + Math.cos(a) * rad, y = r + Math.sin(a) * rad;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    // Ciemniejszy stalowy środek: gwiazdka leci najczęściej na tle jasnego
+    // nieba, więc sam jasny gradient by się na nim rozpłynął.
+    const g = ctx.createLinearGradient(0, 0, size, size);
+    g.addColorStop(0, '#dbe9f6');
+    g.addColorStop(0.45, '#7d95aa');
+    g.addColorStop(1, '#33465a');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(200,238,255,0.95)';
+    ctx.lineWidth = Math.max(1, size * 0.045);
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    // Otwór w środku — czytelny nawet przy szybkim obrocie.
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.arc(r, r, size * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+    return c;
+}
+
 // --- Typy cząsteczek (indeksy do tablicy sprite'ów) -----------------------
 const P_DUST = 0;    // kurz spod stóp / lądowanie
 const P_SPARK = 1;   // złote iskry przy pokonaniu wroga
@@ -64,7 +100,7 @@ const P_WISP = 3;    // zimna poświata za duchami
 const P_EMBER = 4;   // drobinki po trafieniu gracza (czerwone)
 const P_STREAK = 5;  // poziome smugi prędkości (rysowane jako linie)
 const P_PUFF = 6;    // biały obłoczek skoku
-const P_SPEED = 7;   // podłużna smuga prędkości — poświata ninja dasha
+const P_SPEED = 7;   // podłużna smuga prędkości — ślad lecących gwiazdek
 
 const MAX_PARTICLES = 512;
 const MAX_POPUPS = 16;
@@ -151,6 +187,7 @@ class FXSystem {
             makeLeafSprite('#8fae52', '#6d8a3d'),
         ];
         this.glowSoft = makeGlowSprite(64, 200, 225, 255, 0.4); // poświata duchów
+        this.shuriken = makeShurikenSprite(48);                 // gwiazdka ninja
 
         // Bufory zależne od rozmiaru okna (tworzone w resize()).
         this.vignette = null;
@@ -379,23 +416,33 @@ class FXSystem {
             0.5 + Math.random() * 0.3, 8 + Math.random() * 10, -40, 0.95);
     }
 
-    // Smuga prędkości za ninja w trakcie dasha. Wołana co klatkę z aktualnej
-    // pozycji gracza (nie tylko raz na starcie zrywu) — przy 1400 px/s
-    // jednorazowy wybuch cząstek zostaje w tyle za graczem już po kilku
-    // klatkach i wygląda jak oderwany od postaci obłoczek.
-    emitDashTrail(x, y, dir) {
-        for (let i = 0; i < 5; i++) {
-            // Niewielka prędkość wsteczna — cząstki mają tylko zaznaczyć
-            // ślad tuż za graczem, nie odjechać od niego w trakcie życia.
-            this._emit(P_SPEED, x, y + (Math.random() - 0.5) * 20,
-                -dir * (60 + Math.random() * 120), (Math.random() - 0.5) * 40,
-                0.2 + Math.random() * 0.1, 6 + Math.random() * 5, 0, 0.9);
-        }
+    // Ślad za lecącą gwiazdką — wołane co klatkę z jej aktualnej pozycji,
+    // wektor (vx, vy) to jej własny lot, więc smużka kładzie się dokładnie
+    // wzdłuż toru, także po zakręcie w stronę ducha.
+    emitStarTrail(x, y, vx, vy) {
+        // Cząstki dziedziczą ułamek prędkości gwiazdki: zostają lekko z tyłu
+        // zamiast lecieć razem z nią (wtedy ślad w ogóle by się nie ciągnął).
+        // Krótkie życie i cienka kreska są tu istotne — przy dłuższym ogonie
+        // kolejne smużki nakładają się w jednolitą, jasną belkę, która zasłania
+        // samą gwiazdkę (lecą ~15 px na klatkę, więc ślady gęsto na siebie wchodzą).
+        this._emit(P_SPEED, x, y, vx * 0.18, vy * 0.18,
+            0.09 + Math.random() * 0.05, 1.6 + Math.random() * 1.2, 0, 0.9);
     }
 
-    // Lodowoniebieska eksplozja iskier — dash-kill ducha (analogiczna do
-    // emitStompBurst, inny kolor pierścienia).
-    emitDashBurst(x, y) {
+    // Błysk przy wyrzucie gwiazdek — krótki wachlarz iskier za ręką ninja.
+    emitStarThrow(x, y, dir) {
+        for (let i = 0; i < 8; i++) {
+            const a = (Math.random() - 0.5) * 0.9;
+            this._emit(P_SPARK, x, y + (Math.random() - 0.5) * 16,
+                dir * (120 + Math.random() * 260) * Math.cos(a), Math.sin(a) * 140,
+                0.18 + Math.random() * 0.14, 3 + Math.random() * 3, 200, 0.9);
+        }
+        this._emit(P_PUFF, x, y, -dir * 40, 0, 0.22, 16, -60, 0.9);
+    }
+
+    // Lodowoniebieska eksplozja iskier — trafienie ducha gwiazdką
+    // (analogiczna do emitStompBurst, inny kolor pierścienia).
+    emitStarBurst(x, y) {
         for (let i = 0; i < 14; i++) {
             const a = Math.random() * Math.PI * 2;
             const sp = 80 + Math.random() * 220;
@@ -534,16 +581,16 @@ class FXSystem {
                 ctx.fillRect(p.x, p.y, p.size, 2);
             } else if (p.type === P_SPEED) {
                 ctx.globalCompositeOperation = 'lighter';
-                ctx.globalAlpha = Math.min(1, k * 1.3);
-                ctx.strokeStyle = 'rgba(180, 220, 255, 1)';
+                ctx.globalAlpha = k * 0.5;
+                ctx.strokeStyle = 'rgba(150, 205, 255, 1)';
                 ctx.lineWidth = p.size;
                 ctx.lineCap = 'round';
                 ctx.beginPath();
                 ctx.moveTo(p.x, p.y);
                 // Długość smugi rysujemy niezależnie od faktycznej (celowo
-                // małej — patrz emitDashTrail) prędkości dryfu, żeby ślad
+                // małej — patrz emitStarTrail) prędkości dryfu, żeby ślad
                 // czytał się jako kreska, nie okrągła plamka.
-                const len = 22 + p.size * 1.5;
+                const len = 9 + p.size * 3;
                 const vlen = Math.hypot(p.vx, p.vy) || 1;
                 ctx.lineTo(p.x - (p.vx / vlen) * len, p.y - (p.vy / vlen) * len);
                 ctx.stroke();
@@ -598,6 +645,23 @@ class FXSystem {
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = alpha;
         ctx.drawImage(this.glowSoft, x - size / 2, y - size / 2, size, size);
+        ctx.restore();
+    }
+
+    // Gwiazdka ninja w locie: zimna poświata + obrócony sprite. Publiczny
+    // helper — pociski żyją w logice gry (index.html), rysowanie trzymamy tu,
+    // razem z resztą prerenderowanych sprite'ów.
+    drawShuriken(ctx, x, y, size, rot) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.3;
+        const gs = size * 1.7;
+        ctx.drawImage(this.glowSoft, x - gs / 2, y - gs / 2, gs, gs);
+        ctx.restore();
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rot);
+        ctx.drawImage(this.shuriken, -size / 2, -size / 2, size, size);
         ctx.restore();
     }
 
