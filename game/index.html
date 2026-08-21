@@ -99,9 +99,9 @@
         <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">📱 &nbsp;Dotknij połowy ekranu — bieg</div>
         <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">👆 &nbsp;Machnięcie w górę — skok</div>
         <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">⌨️ &nbsp;Strzałki / A-D + spacja</div>
-        <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">⚡ &nbsp;Shift / E w powietrzu — dash (lub machnięcie w bok)</div>
+        <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">⭐ &nbsp;Shift / E w powietrzu — gwiazdki (lub machnięcie w bok)</div>
       </div>
-      <div style="font-size:clamp(13px,3.2vmin,15px);opacity:0.85;max-width:min(460px,88vw);line-height:1.55;animation:slideUp 0.6s 0.24s ease both">Wskocz wrogowi na głowę, aby go pokonać — kolejne trafienia budują <b style="color:#ffc247">serię</b> i mnożą punkty. Zderzenie z boku kosztuje życie!</div>
+      <div style="font-size:clamp(13px,3.2vmin,15px);opacity:0.85;max-width:min(460px,88vw);line-height:1.55;animation:slideUp 0.6s 0.24s ease both">Wskocz wrogowi na głowę, aby go pokonać, a latające duchy zdejmuj <b style="color:#9fd8ff">gwiazdkami</b> — kolejne trafienia budują <b style="color:#ffc247">serię</b> i mnożą punkty. Zderzenie z boku kosztuje życie!</div>
       <button onClick="{{ startGame }}" class="om-touch-btn" style="min-height:52px;padding:clamp(12px,3vmin,16px) clamp(30px,9vmin,52px);font-size:clamp(16px,4.2vmin,19px);font-weight:800;letter-spacing:0.04em;border:none;border-radius:12px;background:linear-gradient(180deg,#ffca5f,#e8a12d);color:#2b1c0e;cursor:pointer;box-shadow:0 6px 24px rgba(232,161,45,0.45), inset 0 1px 0 rgba(255,255,255,0.5);animation:popIn 0.5s 0.32s ease both, floatY 2.6s 1s ease-in-out infinite" style-hover="transform:scale(1.06);box-shadow:0 8px 32px rgba(232,161,45,0.65), inset 0 1px 0 rgba(255,255,255,0.5)">▶ &nbsp;Start</button>
     </div>
   </sc-if>
@@ -163,6 +163,19 @@ const GROUND_LIFT_RATIO = 0.18;
 // Overscan fitu "cover" — warstwa jest celowo większa od ekranu, żeby przy
 // paralaksie nie odsłaniała krawędzi.
 const OVERSCAN = 1.14;
+
+// --- Gwiazdki ninja (shuriken) ---
+// Pula z zapasem na dwie pełne serie: rzut wypuszcza STAR_COUNT sztuk, a druga
+// seria (po odbiciu od wroga) może wyjść zanim pierwsza zdąży zniknąć.
+const STAR_POOL = 12;
+const STAR_COUNT = 3;          // gwiazdek na jeden rzut
+const STAR_SPEED = 900;        // px/s
+const STAR_LIFE = 0.9;         // s — potem gwiazdka gaśnie
+const STAR_SPREAD = 0.22;      // rad — rozrzut wachlarza między gwiazdkami
+const STAR_TURN = 5.5;         // rad/s — jak ostro gwiazdka może zakręcać
+const STAR_SPIN = 20;          // rad/s — obrót własny (wizualny)
+const STAR_RADIUS = 15;        // px — promień kolizji z duchem
+const STAR_SIZE = 34;        // px — rozmiar rysowania
 
 // Skala, w jakiej rysujemy warstwę tła. Podniesiona warstwa musi mieć na dole
 // zapas co najmniej równy liftowi, inaczej po podniesieniu przestaje sięgać
@@ -322,7 +335,7 @@ class Component extends DCLogic {
     if (['ArrowLeft', 'a', 'A'].includes(e.key)) this.keys.left = true;
     if (['ArrowRight', 'd', 'D'].includes(e.key)) this.keys.right = true;
     if (['ArrowUp', 'w', 'W', ' '].includes(e.key)) { e.preventDefault(); this.tryJump(); }
-    if (['Shift', 'e', 'E'].includes(e.key)) this.tryDash();
+    if (['Shift', 'e', 'E'].includes(e.key)) this.tryThrowStars();
   };
   handleKeyUp = (e) => {
     if (['ArrowLeft', 'a', 'A'].includes(e.key)) this.keys.left = false;
@@ -418,10 +431,17 @@ class Component extends DCLogic {
       facingRight: true, invuln: 0,
       // squash & stretch — sprężynują z powrotem do 1 w każdej klatce
       sx: 1, sy: 1,
-      // Ninja Dash: jeden zryw na pobyt w powietrzu — reset przy lądowaniu
-      // lub przy udanym stompie/dash-killu (patrz onStompKill/onDashKill).
-      dashAvailable: true, dashing: false, dashTimer: 0, dashDir: 0, facing: 1,
+      // Gwiazdki ninja: jeden rzut na pobyt w powietrzu — reset przy lądowaniu
+      // lub przy pokonaniu wroga (patrz onStompKill/onStarKill), co pozwala
+      // łączyć akcje w serie. throwTimer trzyma pozę rzutu przez chwilę.
+      starsAvailable: true, throwTimer: 0, facing: 1,
     };
+    // Pula pocisków o stałym rozmiarze — gwiazdki lecą seriami po 3, a pętla
+    // gry nie może alokować (ta sama zasada co pula cząsteczek w FXSystem).
+    this.stars = [];
+    for (let i = 0; i < STAR_POOL; i++) {
+      this.stars.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, rot: 0, life: 0, speed: 0 });
+    }
     this.enemies = [];
     this.gameSpeed = 260;
     this.spawnTimer = 1.4;
@@ -502,23 +522,45 @@ class Component extends DCLogic {
     }
   }
 
-  // Ninja Dash: szybki zryw w powietrzu w kierunku, w którym ninja patrzy.
-  // Jedno użycie na pobyt w powietrzu — dashAvailable wraca dopiero przy
-  // lądowaniu albo przy udanym stompie/dash-killu (pozwala na chain).
-  tryDash() {
+  // Rzut gwiazdkami ninja: wachlarz shurikenów w kierunku, w którym patrzy
+  // ninja. Jeden rzut na pobyt w powietrzu — starsAvailable wraca dopiero przy
+  // lądowaniu albo po pokonaniu wroga (pozwala na serie: stomp → rzut → stomp).
+  tryThrowStars() {
     const p = this.player;
     if (this.state.gameState !== 'playing' || !p || this.state.photoMode || this.state.portraitBlock) return;
-    if (p.onGround || p.dashing || !p.dashAvailable) return;
-    p.dashing = true;
-    p.dashTimer = 0.14;
-    p.dashDir = p.facing;
-    p.dashAvailable = false;
-    p.invuln = Math.max(p.invuln, 0.2); // krótka nietykalność na czas zrywu
-    p.sx = 1.3; p.sy = 0.7; // squash & stretch — rozciągnięcie w kierunku dasha
+    if (p.onGround || !p.starsAvailable) return;
+    p.starsAvailable = false;
+    p.throwTimer = 0.18;
+    p.sx = 1.18; p.sy = 0.86; // krótkie ścięcie sylwetki — zamach ręką
+    const dir = p.facing;
     const groundY = this.computeGroundY(this.viewW, this.viewH, p.x);
-    this.fx.emitDashTrail(p.x - p.dashDir * 40, groundY + p.y - 65, p.dashDir);
-    this.fx.addTrauma(0.08);
-    this.audio.play('jump', 0.5); // placeholder — brak dedykowanego swoosh w sfx/
+    const handX = p.x + dir * 26, handY = groundY + p.y - 78;
+
+    // Wachlarz: środkowa gwiazdka leci prosto, boczne pod kątem — po starcie
+    // każda i tak sama naprowadza się na najbliższego ducha (patrz updateStars).
+    let thrown = 0, slot = 0;
+    for (let i = 0; i < STAR_COUNT; i++) {
+      let s = null;
+      while (slot < STAR_POOL) { if (!this.stars[slot].active) { s = this.stars[slot]; break; } slot++; }
+      if (!s) break; // pula wyczerpana — reszta serii po prostu nie wychodzi
+      slot++;
+      const a = (i - (STAR_COUNT - 1) / 2) * STAR_SPREAD;
+      // Każda gwiazdka leci nieco inaczej szybko: naprowadzanie ściąga je na
+      // wspólny tor, więc przy równych prędkościach zlewałyby się w jeden punkt.
+      // Różnica rozciąga je w czytelną serię lecącą jedna za drugą.
+      s.speed = STAR_SPEED * (0.85 + i * 0.15);
+      s.active = true;
+      s.x = handX; s.y = handY + (i - (STAR_COUNT - 1) / 2) * 10;
+      s.vx = Math.cos(a) * s.speed * dir;
+      s.vy = Math.sin(a) * s.speed;
+      s.rot = Math.random() * Math.PI * 2;
+      s.life = STAR_LIFE;
+      thrown++;
+    }
+
+    this.fx.emitStarThrow(handX, handY, dir);
+    this.fx.addTrauma(0.06);
+    this.audio.play('jump', 0.45); // placeholder — brak dedykowanego swoosh w sfx/
   }
 
   onLeftDown = (e) => { if (e.cancelable) e.preventDefault(); this.keys.left = true; };
@@ -556,10 +598,10 @@ class Component extends DCLogic {
     if (dy < -40 && Math.abs(dy) > Math.abs(dx) * 1.2 && dt < 500) {
       this.tryJump();
     } else if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2 && dt < 400) {
-      // swipe w bok: dash w powietrzu, w kierunku machnięcia
+      // swipe w bok: rzut gwiazdkami w powietrzu, w kierunku machnięcia
       if (this.player && !this.player.onGround) {
         this.player.facing = dx > 0 ? 1 : -1;
-        this.tryDash();
+        this.tryThrowStars();
       }
     }
     this.swipe = null;
@@ -617,7 +659,7 @@ class Component extends DCLogic {
     en.alive = false; en.dead = true; en.deadTimer = 0;
     p.vy = -560;
     p.sx = 0.85; p.sy = 1.15;
-    p.dashAvailable = true; // po stompie można dashować ponownie (chain)
+    p.starsAvailable = true; // po stompie znów można rzucić gwiazdkami (seria)
 
     this.comboTimer = 2.0;
     const combo = this.state.combo + 1;
@@ -647,23 +689,22 @@ class Component extends DCLogic {
     });
   }
 
-  // Dash-kill: ninja przelatuje przez ducha podczas zrywu i zabija go w locie
-  // (dash trwa dalej — w przeciwieństwie do stompu wroga naziemnego, który
-  // przerywa dasha i odbija gracza w górę). Warta więcej niż stomp.
-  onDashKill(en, enY) {
+  // Trafienie ducha gwiazdką. Duchy latają poza zasięgiem skoku, więc to
+  // jedyny sposób na ich zdjęcie — i dlatego punktuje wyżej niż stomp.
+  onStarKill(en, enY) {
     const p = this.player;
     en.alive = false; en.dead = true; en.deadTimer = 0;
-    // Nie zmieniamy vy — ninja leci dalej w dashu.
-    p.dashAvailable = true; // reset — pozwala na chain (stomp → dash → stomp)
+    p.starsAvailable = true; // reset — pozwala na serię (stomp → rzut → stomp)
 
     this.comboTimer = 2.0;
     const combo = this.state.combo + 1;
-    const points = 15 * combo; // dash-kill daje więcej niż stomp
+    const points = 15 * combo; // trafienie w locie daje więcej niż stomp
 
-    this.fx.emitDashBurst(en.x, enY - en.h * 0.5);
+    this.fx.emitStarBurst(en.x, enY - en.h * 0.5);
     this.fx.addTrauma(0.22);
     this.fx.addHitStop(0.04);
     this.fx.flash(0.04, '140, 200, 255'); // lodowoniebieska
+    this.fx.spawnPopup(en.x, enY - en.h - 24, '+' + points, '#9fd8ff', 24);
     this.audio.play('stompKill'); // reużyj istniejącego SFX
     this.audio.play('scoreTick', 0.6);
 
@@ -678,6 +719,76 @@ class Component extends DCLogic {
       if (combo > s.bestCombo) this.audio.play('bestCombo');
       return { score: s.score + points, kills: s.kills + 1, combo, bestCombo: Math.max(s.bestCombo, combo) };
     });
+  }
+
+  // Lot gwiazdek: delikatne naprowadzanie na najbliższego ducha, ślad i
+  // kolizje. Naprowadzanie jest celowo ograniczone kątem skrętu (STAR_TURN) —
+  // gwiazdka dociąga do celu, w który gracz mniej więcej wycelował, ale nie
+  // zawraca za plecy, więc rzut nadal wymaga wyczucia.
+  updateStars(dt) {
+    for (const s of this.stars) {
+      if (!s.active) continue;
+      s.life -= dt;
+      if (s.life <= 0) { s.active = false; continue; }
+
+      // Cel: najbliższy żywy duch. Ground'y pomijamy — gwiazdki są odpowiedzią
+      // na latających wrogów, po naziemnych dalej się skacze.
+      let tx = 0, ty = 0, bestD = Infinity;
+      for (const en of this.enemies) {
+        if (!en.alive || en.dead || en.type !== 'ghost') continue;
+        const enY = en.y + Math.sin(en.bob) * 12;
+        const cx = en.x, cy = enY - en.h * 0.5;
+        const d = (cx - s.x) * (cx - s.x) + (cy - s.y) * (cy - s.y);
+        if (d < bestD) { bestD = d; tx = cx; ty = cy; }
+      }
+
+      if (bestD < Infinity) {
+        // Obrót wektora prędkości w stronę celu, nie więcej niż STAR_TURN*dt.
+        const ang = Math.atan2(s.vy, s.vx);
+        let diff = Math.atan2(ty - s.y, tx - s.x) - ang;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        const step = Math.min(Math.abs(diff), STAR_TURN * dt) * Math.sign(diff);
+        const na = ang + step;
+        s.vx = Math.cos(na) * s.speed;
+        s.vy = Math.sin(na) * s.speed;
+      }
+
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.rot += STAR_SPIN * dt;
+      this.fx.emitStarTrail(s.x, s.y, s.vx, s.vy);
+
+      if (s.x < -60 || s.x > this.viewW + 60 || s.y < -60 || s.y > this.viewH + 60) { s.active = false; continue; }
+
+      for (const en of this.enemies) {
+        if (!en.alive || en.dead || en.type !== 'ghost') continue;
+        const enY = en.y + Math.sin(en.bob) * 12;
+        // Koło (gwiazdka) vs prostokąt (duch) — najbliższy punkt boxa.
+        const bx = Math.max(en.x - en.w / 2, Math.min(s.x, en.x + en.w / 2));
+        const by = Math.max(enY - en.h, Math.min(s.y, enY));
+        const dx = s.x - bx, dy = s.y - by;
+        if (dx * dx + dy * dy <= STAR_RADIUS * STAR_RADIUS) {
+          s.active = false;
+          this.onStarKill(en, enY);
+          break;
+        }
+      }
+    }
+  }
+
+  // Gwiazdki rysujemy nad wrogami i graczem — lecą "przed" sceną.
+  drawStars(ctx) {
+    if (!this.stars) return;
+    for (const s of this.stars) {
+      if (!s.active) continue;
+      // Ostatnie chwile lotu wygaszamy, żeby gwiazdka nie znikała skokowo.
+      const fade = Math.min(1, s.life / 0.18);
+      ctx.save();
+      ctx.globalAlpha = fade;
+      this.fx.drawShuriken(ctx, s.x, s.y, STAR_SIZE, s.rot);
+      ctx.restore();
+    }
   }
 
   // Trafienie gracza: czerwony rozbłysk, mocny shake, hit-stop; przy utracie
@@ -744,42 +855,12 @@ class Component extends DCLogic {
 
       const wasAirborne = !p.onGround;
       const fallSpeed = p.vy;
-      // Ninja Dash zamraża grawitację na czas zrywu (patrz blok niżej) —
-      // bez tej blokady dt-y grawitacji nazbierane w trakcie dasha
-      // odpaliłyby się jako gwałtowny spadek zaraz po jego zakończeniu.
-      if (!p.dashing) {
-        p.vy += 2200 * dt;
-        p.y += p.vy * dt;
-        if (p.y >= 0) { p.y = 0; p.vy = 0; p.onGround = true; }
-      }
+      p.vy += 2200 * dt;
+      p.y += p.vy * dt;
+      if (p.y >= 0) { p.y = 0; p.vy = 0; p.onGround = true; }
       if (p.invuln > 0) p.invuln -= dt;
 
-      // Ninja Dash — aktywny zryw w powietrzu: stały ruch poziomy w kierunku
-      // dashDir, zamrożona grawitacja (patrz wyżej). Jedno użycie na pobyt
-      // w powietrzu — reset przy lądowaniu lub udanym stompie/dash-killu.
-      if (p.dashing) {
-        p.dashTimer -= dt;
-        if (p.dashTimer <= 0) {
-          p.dashing = false;
-        } else {
-          const nextX = p.x + p.dashDir * 1400 * dt;
-          const clampedX = Math.max(p.minX, Math.min(p.maxX, nextX));
-          if (clampedX !== nextX) {
-            // Trafienie w granicę ekranu przerywa dash — bez tego postać
-            // zostawała przyklejona do krawędzi do końca zrywu (widoczne
-            // zwłaszcza na wąskich ekranach mobile, gdzie dash pokonuje
-            // niemal cały dostępny pas ruchu gracza w jedną stronę).
-            p.dashing = false;
-          }
-          p.x = clampedX;
-          // Smuga ciągnie się co klatkę za aktualną pozycją, żeby nie
-          // odklejała się od gracza pędzącego z prędkością dasha. Punkt
-          // startowy przesunięty za plecy (przeciwnie do dashDir) — cząstki
-          // rysują się nad postacią (patrz drawEffects w tick()), więc bez
-          // tego przesunięcia najjaśniejsza z nich lądowałaby na twarzy.
-          this.fx.emitDashTrail(p.x - p.dashDir * 40, groundY + p.y - 65, p.dashDir);
-        }
-      }
+      if (p.throwTimer > 0) p.throwTimer -= dt;
 
       // Lądowanie: kurz + zgniecenie sylwetki zależne od siły upadku.
       if (wasAirborne && p.onGround) {
@@ -787,7 +868,7 @@ class Component extends DCLogic {
         this.fx.emitLanding(p.x, groundY, impact);
         p.sx = 1 + 0.3 * impact; p.sy = 1 - 0.28 * impact;
         if (impact > 0.5) this.fx.addTrauma(0.12 * impact);
-        p.dashAvailable = true; // lądowanie resetuje dash
+        p.starsAvailable = true; // lądowanie odnawia rzut
         this.trail.length = 0;
       }
 
@@ -868,21 +949,14 @@ class Component extends DCLogic {
         const overlap = pBox.x < eBox.x + eBox.w && pBox.x + pBox.w > eBox.x && pBox.y < eBox.y + eBox.h && pBox.y + pBox.h > eBox.y;
         if (overlap && en.alive) {
           const fallingOnTop = en.type === 'ground' && p.vy > 0 && (pBox.y + pBox.h) - eBox.y < eBox.h * 0.6;
-          if (p.dashing && en.type === 'ghost') {
-            // Duchy giną w locie — dash przez nie po prostu przelatuje.
-            this.onDashKill(en, enY);
-          } else if (p.dashing && en.type === 'ground') {
-            // Wróg naziemny podczas dasha: traktujemy jak stomp (odbicie w
-            // górę) i przerywamy zryw, zamiast przebijać się przez niego.
-            this.onStompKill(en, enY);
-            p.dashing = false;
-          } else if (fallingOnTop) {
-            this.onStompKill(en, enY);
-          } else if (p.invuln <= 0) {
-            this.onPlayerHit(en, enY);
-          }
+          if (fallingOnTop) this.onStompKill(en, enY);
+          else if (p.invuln <= 0) this.onPlayerHit(en, enY);
         }
       });
+
+      // Gwiazdki po ruchu wrogów — trafiają w pozycje z tej samej klatki.
+      this.updateStars(dt);
+
       this.enemies = this.enemies.filter(en => en.x > -100 && !(en.dead && en.deadTimer > 0.4));
 
       const distDelta = this.gameSpeed * dt;
@@ -968,6 +1042,7 @@ class Component extends DCLogic {
       this.enemies.forEach(en => this.drawEnemy(ctx, en, groundY));
       this.drawTrail(ctx, groundY);
       this.drawPlayer(ctx, this.player, groundY);
+      this.drawStars(ctx);
     }
 
     // Cząsteczki, fale uderzeniowe i popupy — nad postaciami.
@@ -1074,15 +1149,15 @@ class Component extends DCLogic {
     // invuln przestaje odliczać poza stanem 'playing' (patrz tick()) — bez tej
     // blokady player zostawałby na stałe przygaszony po śmierci.
     if (this.state.gameState === 'playing' && p.invuln > 0 && Math.floor(p.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.4;
-    if (p.dashing) ctx.globalAlpha = 0.6; // przezroczystość w trakcie zrywu
     ctx.translate(drawX, drawY);
     // Squash & stretch skaluje sylwetkę wokół punktu przy stopach.
     ctx.scale((p.facingRight ? 1 : -1) * (p.sx || 1), p.sy || 1);
     ctx.drawImage(f.sheet, f.sx, f.sy, f.sWidth, f.sHeight, -displayW / 2, -displayH, displayW, displayH);
-    if (p.dashing) {
-      // Drugie renderowanie trybem 'lighter' — efekt ghostingu/poświaty dasha.
+    if (p.throwTimer > 0) {
+      // Zimny rozbłysk sylwetki tuż po rzucie — czytelne potwierdzenie akcji,
+      // gasnące razem z throwTimer.
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.3;
+      ctx.globalAlpha = 0.35 * (p.throwTimer / 0.18);
       ctx.drawImage(f.sheet, f.sx, f.sy, f.sWidth, f.sHeight, -displayW / 2, -displayH, displayW, displayH);
     }
     ctx.restore();
