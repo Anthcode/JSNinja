@@ -128,6 +128,18 @@ w ogóle nie dochodzi. Grupy testów dotykające kolizji dostają **świeżą st
 `enemies.find(...)` myli „sprzątnięty po zabiciu" z „nietrafiony". W testach
 trzymaj **referencję** do wroga (`window.__ghost = {...}; g.enemies.push(...)`).
 
+### Pliki sfx z `#` w nazwie trzeba enkodować w `AudioManager`
+
+Assety audio bywają nazwane surowo, tak jak wyszły z generatora (np.
+`Sharp_quick_throwing_#4-….mp3`). `#` w URL-u zaczyna fragment — bez zamiany
+na `%23` przeglądarka odcina resztę ścieżki i plik dostaje 404 **po cichu**:
+`AudioManager.play()` łyka odrzucenie `play()` (`node.play().catch(() => {})`,
+patrz komentarz przy tej linii — to celowe, dla przeglądarek blokujących audio
+poza gestem użytkownika), więc w konsoli nic nie widać, dźwięk po prostu nigdy
+nie gra. Test `dźwięk > każdy zadeklarowany plik sfx ładuje się` w
+`tests/mechanics.test.mjs` łapie to dla każdego pliku w `files` naraz —
+sprawdzone empirycznie: bez `%23` test faktycznie czerwienieje.
+
 ### `git push` czasem zwraca 502
 
 Zdarza się `remote: session scope unavailable` + HTTP 502 z proxy gita, przy

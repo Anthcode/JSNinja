@@ -136,6 +136,34 @@ describe('gwiazdki ninja', () => {
   });
 });
 
+describe('dźwięk', () => {
+  let game;
+  before(async () => { game = await bootGame(); });
+  after(async () => { await game?.close(); });
+
+  // Regresja: sfx rzutu gwiazdkami miał nazwę pliku z "#", co w URL-u zaczyna
+  // fragment — bez zakodowania na %23 przeglądarka odcinała resztę ścieżki
+  // i plik nigdy się nie ładował (cichy 404, żadnego błędu w konsoli, bo
+  // AudioManager łyka odrzucenie play() — patrz komentarz w klasie). Zamiast
+  // pilnować jednego pliku, sprawdzamy WSZYSTKIE zadeklarowane sfx naraz, żeby
+  // ta sama klasa błędu przy kolejnym dodanym dźwięku też została złapana.
+  it('każdy zadeklarowany plik sfx ładuje się (200, nie 404)', async () => {
+    const results = await game.page.evaluate(() => Promise.all(
+      Object.entries(window.__game.audio.sounds).map(async ([key, audioEl]) => {
+        const res = await fetch(audioEl.src);
+        return { key, src: audioEl.src, status: res.status };
+      }),
+    ));
+    const failed = results.filter((r) => r.status !== 200);
+    assert.deepEqual(failed, [], `te pliki sfx nie ładują się: ${JSON.stringify(failed)}`);
+    assert.ok(results.length >= 10, 'lista dźwięków wygląda podejrzanie krótko — AudioManager się nie wczytał?');
+  });
+
+  it('nie zgłasza błędów w konsoli', () => {
+    assert.deepEqual(game.errors, []);
+  });
+});
+
 describe('walka wręcz (regresje)', () => {
   let game;
   // Świeża strona: te ścieżki zależą od gameSpeed i pozycji gracza, które
