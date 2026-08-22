@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#1a1410">
+<!-- Po dodaniu do ekranu głównego gra startuje bez paska adresu; Android bierze
+     orientację z manifestu, iOS honoruje tylko te dwa metatagi. -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" href="./icons/icon-192.png" type="image/png">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>JS Ninja</title>
+<style>
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes pulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.15) } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(26px) } to { opacity: 1; transform: translateY(0) } }
+  @keyframes popIn { 0% { opacity: 0; transform: scale(0.7) } 70% { transform: scale(1.06) } 100% { opacity: 1; transform: scale(1) } }
+  @keyframes floatY { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
+  @keyframes titleShine {
+    0% { background-position: -200% center }
+    100% { background-position: 200% center }
+  }
+  @keyframes barTop { from { transform: translateY(-100%) } to { transform: translateY(0) } }
+  @keyframes barBottom { from { transform: translateY(100%) } to { transform: translateY(0) } }
+  @keyframes hintFade { 0% { opacity: 0 } 12% { opacity: 1 } 72% { opacity: 1 } 100% { opacity: 0 } }
+  @keyframes rotatePhone {
+    0%, 18%   { transform: rotate(0deg) }
+    42%, 78%  { transform: rotate(-90deg) }
+    100%      { transform: rotate(0deg) }
+  }
+  /* Runtime nie zeruje marginesu body w trybie podglądu — domyślne 8px
+     tworzyłoby poziomy overflow na scenie o szerokości 100vw. */
+  html, body { margin: 0; padding: 0; overscroll-behavior: none; background: #1a1410; }
+  .om-touch-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  /* Wymiary sceny trzymamy w klasie, nie w atrybucie style: runtime zwija
+     inline CSS do obiektu (support.js cssToObj), więc powtórzona deklaracja
+     height zjadłaby fallback. W kaskadzie 100dvh po prostu nadpisuje 100vh
+     tam, gdzie jednostka jest wspierana. */
+  .fx-stage { width: 100vw; height: 100vh; height: 100dvh; }
+  /* Mobile first: na niskich ekranach (telefon w poziomie) zagęszczamy układ. */
+  @media (max-height: 480px) {
+    .fx-screen { gap: 10px !important; }
+    .fx-screen .fx-tagline { display: none; }
+  }
+  /* Uwaga wydajnościowa: żadnego backdrop-filter na elementach widocznych
+     podczas gry — blur nad animowanym canvasem kosztuje kilka klatek/s. */
+  .fx-panel {
+    background: rgba(16, 10, 6, 0.55);
+    border: 1px solid rgba(255, 226, 170, 0.18);
+    border-radius: 14px;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.35);
+  }
+  .fx-title {
+    background: linear-gradient(100deg, #ffe9b0 20%, #ffb84d 40%, #fff6dd 50%, #ffb84d 60%, #ffe9b0 80%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: titleShine 4s linear infinite;
+    filter: drop-shadow(0 4px 14px rgba(0,0,0,0.75));
+  }
+  .fx-heart { transition: opacity 0.35s ease, filter 0.35s ease, transform 0.35s ease; }
+</style>
+<script src="./spriteAnimator.js"></script>
+<script src="./effects.js"></script>
+</helmet>
+<div class="fx-stage" style="position:relative;overflow:hidden;background:#1a1410;font-family:'Trebuchet MS',sans-serif;user-select:none;touch-action:none" tabIndex="0" ref="{{ stageRef }}" onClick="{{ onStageClick }}" onMouseDown="{{ onStageMouseDown }}" onTouchStart="{{ onStageTouchStart }}" onTouchMove="{{ onStageTouchMove }}" onTouchEnd="{{ onStageTouchEnd }}">
+  <canvas ref="{{ canvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block;animation:fadeIn 0.6s ease"></canvas>
+
+  <sc-if value="{{ hudVisible }}">
+    <div class="fx-panel" style="position:absolute;top:calc(12px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));display:flex;gap:clamp(5px,1.5vw,8px);padding:clamp(6px,1.6vw,10px) clamp(9px,2vw,14px)">
+      <sc-for list="{{ hearts }}" as="h" hint-placeholder-count="3">
+        <div class="fx-heart" style="font-size:clamp(19px,5vw,26px);filter:{{ h.filter }};opacity:{{ h.opacity }};transform:scale({{ h.scale }})">❤️</div>
+      </sc-for>
+    </div>
+
+    <div class="fx-panel" style="position:absolute;top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));text-align:right;color:#fff2dc;padding:clamp(5px,1.4vw,8px) clamp(10px,2.2vw,16px) clamp(6px,1.6vw,10px);min-width:clamp(96px,24vw,130px)">
+      <div style="font-size:clamp(20px,5.2vw,27px);font-weight:800;letter-spacing:0.02em;text-shadow:0 2px 6px rgba(0,0,0,0.7);line-height:1.15">{{ scoreLabel }}</div>
+      <div style="font-size:clamp(10px,2.6vw,12px);opacity:0.75;letter-spacing:0.08em;text-transform:uppercase">Dystans {{ distanceLabel }} m</div>
+      <sc-if value="{{ comboLabel }}">
+        <div style="font-size:clamp(12px,3vw,14px);font-weight:800;color:#ffc247;text-shadow:0 0 12px rgba(255,180,60,0.8);animation:pulse 0.5s ease infinite">{{ comboLabel }}</div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isReady }}">
+    <div class="fx-screen" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%, rgba(24,16,8,0.45), rgba(8,5,3,0.82));gap:clamp(12px,3vmin,22px);color:#fff2dc;text-align:center;animation:fadeIn 0.5s ease;padding:16px;box-sizing:border-box">
+      <div class="fx-tagline" style="font-size:clamp(11px,2.6vmin,15px);letter-spacing:0.35em;text-transform:uppercase;opacity:0.7;animation:slideUp 0.6s ease both">Przygoda w lesie cieni</div>
+      <div class="fx-title" style="font-size:clamp(30px,9vmin,56px);font-weight:800;letter-spacing:0.01em;animation:slideUp 0.6s 0.08s ease both;line-height:1.1">JS Ninja</div>
+      <div style="display:flex;gap:clamp(8px,2vmin,12px);flex-wrap:wrap;justify-content:center;animation:slideUp 0.6s 0.16s ease both;max-width:92vw">
+        <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">📱 &nbsp;Dotknij połowy ekranu — bieg</div>
+        <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">👆 &nbsp;Machnięcie w górę — skok</div>
+        <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">⌨️ &nbsp;Strzałki / A-D + spacja</div>
+        <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(12px,3vmin,14px)">⭐ &nbsp;Shift / E w powietrzu — gwiazdki (lub machnięcie w bok)</div>
+      </div>
+      <div style="font-size:clamp(13px,3.2vmin,15px);opacity:0.85;max-width:min(460px,88vw);line-height:1.55;animation:slideUp 0.6s 0.24s ease both">Wskocz wrogowi na głowę, aby go pokonać, a latające duchy zdejmuj <b style="color:#9fd8ff">gwiazdkami</b> — kolejne trafienia budują <b style="color:#ffc247">serię</b> i mnożą punkty. Zderzenie z boku kosztuje życie!</div>
+      <button onClick="{{ startGame }}" class="om-touch-btn" style="min-height:52px;padding:clamp(12px,3vmin,16px) clamp(30px,9vmin,52px);font-size:clamp(16px,4.2vmin,19px);font-weight:800;letter-spacing:0.04em;border:none;border-radius:12px;background:linear-gradient(180deg,#ffca5f,#e8a12d);color:#2b1c0e;cursor:pointer;box-shadow:0 6px 24px rgba(232,161,45,0.45), inset 0 1px 0 rgba(255,255,255,0.5);animation:popIn 0.5s 0.32s ease both, floatY 2.6s 1s ease-in-out infinite" style-hover="transform:scale(1.06);box-shadow:0 8px 32px rgba(232,161,45,0.65), inset 0 1px 0 rgba(255,255,255,0.5)">▶ &nbsp;Start</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ gameOverVisible }}">
+    <div class="fx-screen" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 45%, rgba(30,10,8,0.5), rgba(8,4,3,0.85));gap:clamp(10px,2.6vmin,18px);color:#fff2dc;text-align:center;animation:fadeIn 0.7s ease;padding:16px;box-sizing:border-box">
+      <div class="fx-title" style="font-size:clamp(28px,8vmin,46px);font-weight:800;animation:slideUp 0.6s ease both">Koniec gry</div>
+      <div style="display:flex;gap:clamp(8px,2.2vmin,14px);flex-wrap:wrap;justify-content:center;animation:slideUp 0.6s 0.1s ease both;max-width:92vw">
+        <div class="fx-panel" style="padding:clamp(9px,2.2vmin,14px) clamp(14px,4vmin,26px);min-width:clamp(84px,22vmin,110px)">
+          <div style="font-size:clamp(22px,6vmin,30px);font-weight:800;color:#ffc247">{{ scoreLabel }}</div>
+          <div style="font-size:clamp(10px,2.6vmin,12px);opacity:0.7;text-transform:uppercase;letter-spacing:0.08em">Wynik</div>
+        </div>
+        <div class="fx-panel" style="padding:clamp(9px,2.2vmin,14px) clamp(14px,4vmin,26px);min-width:clamp(84px,22vmin,110px)">
+          <div style="font-size:clamp(22px,6vmin,30px);font-weight:800">{{ kills }}</div>
+          <div style="font-size:clamp(10px,2.6vmin,12px);opacity:0.7;text-transform:uppercase;letter-spacing:0.08em">Wrogowie</div>
+        </div>
+        <div class="fx-panel" style="padding:clamp(9px,2.2vmin,14px) clamp(14px,4vmin,26px);min-width:clamp(84px,22vmin,110px)">
+          <div style="font-size:clamp(22px,6vmin,30px);font-weight:800">{{ distanceLabel }} m</div>
+          <div style="font-size:clamp(10px,2.6vmin,12px);opacity:0.7;text-transform:uppercase;letter-spacing:0.08em">Dystans</div>
+        </div>
+      </div>
+      <div class="fx-tagline" style="font-size:clamp(13px,3.2vmin,15px);opacity:0.75;animation:slideUp 0.6s 0.18s ease both">Najlepsza seria: <b style="color:#ffc247">x{{ bestCombo }}</b></div>
+      <button onClick="{{ startGame }}" class="om-touch-btn" style="min-height:52px;padding:clamp(12px,3vmin,16px) clamp(26px,8vmin,46px);font-size:clamp(15px,4vmin,18px);font-weight:800;letter-spacing:0.04em;border:none;border-radius:12px;background:linear-gradient(180deg,#ffca5f,#e8a12d);color:#2b1c0e;cursor:pointer;box-shadow:0 6px 24px rgba(232,161,45,0.45), inset 0 1px 0 rgba(255,255,255,0.5);animation:popIn 0.5s 0.26s ease both" style-hover="transform:scale(1.06);box-shadow:0 8px 32px rgba(232,161,45,0.65), inset 0 1px 0 rgba(255,255,255,0.5)">↻ &nbsp;Zagraj ponownie</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ photoBtnVisible }}">
+    <button class="om-touch-btn" onClick="{{ onPhotoClick }}" onMouseDown="{{ onPhotoMouseDown }}" onTouchStart="{{ onPhotoTouchStart }}" onTouchEnd="{{ onPhotoTouchEnd }}" title="Tryb foto (P)" style="position:absolute;right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;border:1px solid rgba(255,226,170,0.25);background:rgba(16,10,6,0.55);color:#fff2dc;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,0.4)" style-hover="background:rgba(40,26,12,0.7);transform:scale(1.08)">📷</button>
+  </sc-if>
+
+  <sc-if value="{{ isPhoto }}">
+    <div style="position:absolute;top:0;left:0;right:0;height:clamp(24px,6vh,60px);background:#000;animation:barTop 0.45s ease both;pointer-events:none"></div>
+    <div style="position:absolute;bottom:0;left:0;right:0;height:clamp(24px,6vh,60px);background:#000;animation:barBottom 0.45s ease both;pointer-events:none"></div>
+    <div style="position:absolute;left:0;right:0;bottom:calc(clamp(24px,6vh,60px) + 14px);text-align:center;color:#fff2dc;font-size:clamp(12px,3vw,14px);letter-spacing:0.06em;text-shadow:0 2px 6px rgba(0,0,0,0.8);animation:hintFade 3.2s ease both;pointer-events:none">Dotknij ekranu lub naciśnij P, aby wrócić do gry</div>
+    <div style="position:absolute;left:calc(14px + env(safe-area-inset-left));top:calc(clamp(24px,6vh,60px) + 12px);color:#fff2dc;opacity:0.55;font-size:clamp(11px,2.8vw,13px);font-weight:700;letter-spacing:0.08em;text-shadow:0 2px 6px rgba(0,0,0,0.8);pointer-events:none">🥷 JS NINJA</div>
+  </sc-if>
+
+  <!-- Ostatnie dziecko sceny: pozostałe nakładki nie ustawiają z-index, więc
+       kolejność w DOM wystarczy, żeby prośba o obrót przykryła wszystko. -->
+  <sc-if value="{{ portraitBlockVisible }}">
+    <div class="fx-screen" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 45%, #241a10, #0a0705);gap:clamp(14px,4vmin,26px);color:#fff2dc;text-align:center;animation:fadeIn 0.35s ease;padding:20px;box-sizing:border-box">
+      <div style="font-size:clamp(56px,20vmin,110px);line-height:1;animation:rotatePhone 3s ease-in-out infinite;filter:drop-shadow(0 6px 18px rgba(0,0,0,0.7))">📱</div>
+      <div class="fx-title" style="font-size:clamp(24px,7vmin,42px);font-weight:800;line-height:1.1">Obróć telefon</div>
+      <div style="font-size:clamp(13px,3.4vmin,16px);opacity:0.85;max-width:min(420px,86vw);line-height:1.55">Gra działa w orientacji poziomej. Obróć urządzenie, aby grać dalej.</div>
+      <div class="fx-panel" style="padding:clamp(7px,1.8vmin,10px) clamp(12px,3vmin,18px);font-size:clamp(11px,2.8vmin,13px);opacity:0.8">🔓 &nbsp;Sprawdź, czy blokada obrotu ekranu jest wyłączona</div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:720}}">
+// O tyle podnosimy ziemię razem z graczem, wrogami i efektami — ułamek
+// wysokości sceny, nie stała w px. Sztywne 100 px rozjeżdżało kompozycję:
+// na telefonie w poziomie to ćwiartka ekranu, na 1440p siódma część, więc
+// linia gruntu wypadała raz na 70%, raz na 76% wysokości. Przy 18% siedzi
+// na ~73% niezależnie od okna.
+const GROUND_LIFT_RATIO = 0.18;
+
+// Overscan fitu "cover" — warstwa jest celowo większa od ekranu, żeby przy
+// paralaksie nie odsłaniała krawędzi.
+const OVERSCAN = 1.14;
+
+// --- Gwiazdki ninja (shuriken) ---
+// Pula z zapasem na dwie pełne serie: rzut wypuszcza STAR_COUNT sztuk, a druga
+// seria (po odbiciu od wroga) może wyjść zanim pierwsza zdąży zniknąć.
+const STAR_POOL = 12;
+const STAR_COUNT = 3;          // gwiazdek na jeden rzut
+const STAR_SPEED = 900;        // px/s
+const STAR_LIFE = 0.9;         // s — potem gwiazdka gaśnie
+const STAR_SPREAD = 0.22;      // rad — rozrzut wachlarza między gwiazdkami
+const STAR_TURN = 5.5;         // rad/s — jak ostro gwiazdka może zakręcać
+const STAR_SPIN = 20;          // rad/s — obrót własny (wizualny)
+const STAR_RADIUS = 15;        // px — promień kolizji z duchem
+const STAR_SIZE = 34;        // px — rozmiar rysowania
+
+// Skala, w jakiej rysujemy warstwę tła. Podniesiona warstwa musi mieć na dole
+// zapas co najmniej równy liftowi, inaczej po podniesieniu przestaje sięgać
+// dolnej krawędzi i prześwituje spod niej warstwa dalszego planu. Sam overscan
+// tego nie gwarantuje — przy 1280x720 daje tylko 50 px. Dokładka włącza się
+// wyłącznie tam, gdzie zapasu brakuje; przy szerokich, niskich oknach cover
+// i tak wystarcza.
+function layerScale(img, w, h, lift) {
+  const cover = Math.max(w / img.width, h / img.height) * OVERSCAN;
+  if (!lift) return cover;
+  return Math.max(cover, (h + 2 * lift + 2) / img.height);
+}
+
+// Krótkie SFX odpalane na klonach <audio> — clone pozwala nakładać się
+// dźwiękom (np. seria stompów), zamiast ucinać poprzedni przy każdym play().
+class AudioManager {
+  constructor() {
+    this.sounds = {};
+    const files = {
+      jump: 'sfx/jump.mp3',
+      // Nazwa pliku zawiera "#" — bez zakodowania na %23 przeglądarka odcina
+      // wszystko po nim jako fragment URL-a i dźwięk nigdy się nie ładuje.
+      starThrow: 'sfx/Sharp_quick_throwing_%234-1787377360114.mp3',
+      stompKill: 'sfx/stomp-kill.mp3',
+      scoreTick: 'sfx/score-tick.mp3',
+      playerHit: 'sfx/player-hit.mp3',
+      ghostHit: 'sfx/ghost-hit.mp3',
+      combo: 'sfx/combo.mp3',
+      bestCombo: 'sfx/best-combo.mp3',
+      gameStart: 'sfx/game-start.mp3',
+      gameOver: 'sfx/game-over.mp3',
+    };
+    Object.entries(files).forEach(([key, src]) => {
+      const a = new Audio(src);
+      a.preload = 'auto';
+      this.sounds[key] = a;
+    });
+  }
+
+  play(key, volume = 1) {
+    const base = this.sounds[key];
+    if (!base) return;
+    const node = base.cloneNode(true);
+    node.volume = volume;
+    // Przeglądarka może odrzucić play() poza gestem użytkownika — nie ma to
+    // wpływu na rozgrywkę, więc błąd po prostu ignorujemy.
+    node.play().catch(() => {});
+  }
+}
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.canvasRef = React.createRef();
+    this.stageRef = React.createRef();
+    this.state = { gameState: 'ready', lives: 3, score: 0, distance: 0, kills: 0, combo: 0, bestCombo: 1, photoMode: false, portraitBlock: false };
+    this.layers = [];
+    this.enemies = [];
+    this.keys = { left: false, right: false };
+    // Poświata w powietrzu za graczem — startGame() ją resetuje, ale tick()
+    // odlicza jej zanikanie w każdej klatce (także przed pierwszym Start),
+    // więc musi istnieć od razu.
+    this.trail = [];
+    this.t0 = performance.now();
+    this.lastTime = this.t0;
+    // Wymiary sceny w px CSS — mierzone z elementu, nie z window (patrz resizeCanvas).
+    this.viewW = 0;
+    this.viewH = 0;
+    // Prędkość przewijania tła (parallax) — płynnie dogania docelową prędkość
+    // (patrz tick()), żeby game over hamował scenę zamiast ciąć ją nagle.
+    this.bgSpeed = 40;
+    this.audio = new AudioManager();
+  }
+
+  componentDidMount() {
+    this.isMobile = this.detectMobile();
+    this.portraitMq = window.matchMedia('(orientation: portrait)');
+    this.portraitMq.addEventListener('change', this.handleOrientation);
+    this.loadLayers();
+    window.addEventListener('resize', this.handleResize);
+    // orientationchange leci na iOS zanim layout się przeliczy — handleResize
+    // mierzy dopiero w kolejnej klatce, więc dostaje już nowe wymiary.
+    window.addEventListener('orientationchange', this.handleResize);
+    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
+    this.handleOrientation();
+    // Mierzymy scenę od razu: loadLayers jest asynchroniczne, a przycisk
+    // „Start" da się kliknąć zanim warstwy dojadą.
+    this.resizeCanvas();
+  }
+
+  componentWillUnmount() {
+    cancelAnimationFrame(this.raf);
+    cancelAnimationFrame(this.resizeRaf);
+    this.portraitMq.removeEventListener('change', this.handleOrientation);
+    window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('orientationchange', this.handleResize);
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
+  }
+
+  // ==== Orientacja i pełny ekran (tylko mobile) ====
+
+  // Wykrywanie po możliwościach urządzenia, nie po User-Agent.
+  //
+  // Wystarczy sam gruby wskaźnik: „pointer" opisuje wskaźnik GŁÓWNY, więc
+  // laptop z ekranem dotykowym raportuje tu fine (główna jest myszka) i nie
+  // złapie się w warunek. Świadomie nie dokładamy „hover: none" — część
+  // Androidów (podpięta myszka, tryb desktopowy, niektóre nakładki
+  // producenta) raportuje hover: hover i wypadała z wykrywania mimo
+  // ewidentnie dotykowego ekranu.
+  //
+  // Drugi warunek łapie telefon z podpiętym wskaźnikiem precyzyjnym:
+  // jakikolwiek gruby wskaźnik przy dotykowym ekranie i małej przekątnej.
+  // Laptopy dotykowe odpadają na progu szerokości.
+  detectMobile() {
+    if (window.matchMedia('(pointer: coarse)').matches) return true;
+    return window.matchMedia('(any-pointer: coarse)').matches
+        && navigator.maxTouchPoints > 0
+        && Math.min(window.screen.width, window.screen.height) <= 500;
+  }
+
+  handleOrientation = () => {
+    const blocked = !!(this.isMobile && this.portraitMq.matches);
+    if (blocked === this.state.portraitBlock) return;
+    // Bez tego gracz zablokowany w trakcie biegu zostaje z wciśniętym kierunkiem.
+    if (blocked) { this.keys.left = false; this.keys.right = false; }
+    this.setState({ portraitBlock: blocked });
+  };
+
+  // Wołane wyłącznie ze startGame — to jedyny moment z aktywnym gestem
+  // użytkownika, a poza gestem przeglądarka i tak odrzuci oba żądania.
+  // Każdy krok osobno w try/catch: iOS nie zna Fullscreen API na iPhonie
+  // i odrzuca orientation.lock, a niezłapane odrzucenie zaśmieca konsolę.
+  async enterImmersive() {
+    if (!this.isMobile) return;
+    try {
+      const root = document.documentElement;
+      if (!document.fullscreenElement && root.requestFullscreen) {
+        await root.requestFullscreen({ navigationUI: 'hide' });
+      }
+    } catch (_) { /* odmowa albo brak wsparcia — gramy dalej w oknie */ }
+    try {
+      await screen.orientation?.lock?.('landscape');
+    } catch (_) { /* brak blokady — zostaje nakładka „Obróć telefon" */ }
+  }
+
+  handleResize = () => {
+    // fx.resize() realokuje trzy pełnoekranowe canvasy offscreen, a obrót
+    // ekranu i zwijanie paska adresu sypią serią zdarzeń — zbieramy je do
+    // jednej klatki.
+    cancelAnimationFrame(this.resizeRaf);
+    this.resizeRaf = requestAnimationFrame(() => this.resizeCanvas());
+  };
+
+  handleKeyDown = (e) => {
+    if (this.state.portraitBlock) return;
+    if (['p', 'P'].includes(e.key)) { this.togglePhotoMode(); return; }
+    if (this.state.photoMode) return;
+    if (['ArrowLeft', 'a', 'A'].includes(e.key)) this.keys.left = true;
+    if (['ArrowRight', 'd', 'D'].includes(e.key)) this.keys.right = true;
+    if (['ArrowUp', 'w', 'W', ' '].includes(e.key)) { e.preventDefault(); this.tryJump(); }
+    if (['Shift', 'e', 'E'].includes(e.key)) this.tryThrowStars();
+  };
+  handleKeyUp = (e) => {
+    if (['ArrowLeft', 'a', 'A'].includes(e.key)) this.keys.left = false;
+    if (['ArrowRight', 'd', 'D'].includes(e.key)) this.keys.right = false;
+  };
+
+  async loadLayers() {
+    // liftsWithGround: warstwa jedzie w górę razem z linią gruntu (o
+    // GROUND_LIFT_RATIO wysokości sceny). Dotyczy tego, na czym się stoi —
+    // czyli platform. Foreground i frame kadrują ekran, nie scenę, i zostają
+    // na miejscu. Ten sam lift odejmuje computeGroundY, żeby gracz, wrogowie
+    // i efekty trzymały się widocznej powierzchni.
+    const configs = [
+      { path: 'layers/sky.png',       mult: 0.05, blend: 'source-over', mirrorTile: false },
+      { path: 'layers/mid.png',       mult: 0.3,  blend: 'source-over', mirrorTile: false },
+      { path: 'layers/platforms.png', mult: 1.0,  blend: 'source-over', mirrorTile: true, liftsWithGround: true },
+      { path: 'layers/foreground-props.png', mult: 1.4, blend: 'source-over', mirrorTile: false },
+      { path: 'layers/frame.png',     mult: 1.3,  blend: 'source-over', mirrorTile: false },
+    ];
+    const imgs = await Promise.all(configs.map(c => new Promise(res => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.src = c.path;
+    })));
+    this.layers = imgs.map((im, i) => ({ img: im, mult: configs[i].mult, blend: configs[i].blend, mirrorTile: configs[i].mirrorTile, liftsWithGround: !!configs[i].liftsWithGround, scrollX: 0 }));
+
+    const groundIdx = configs.findIndex(c => c.path === 'layers/platforms.png');
+    this.groundImg = imgs[groundIdx];
+    this.groundLayer = this.layers[groundIdx];
+    // ground height (px from bottom of platforms.png) — flat across the whole layer
+    this.groundProfile = [ { x: 0, h: 190 }, { x: 100000, h: 190 } ];
+
+    this.animator = new AnimatorController(CHARACTER_ANIM_DATA);
+    this.fx = new FXSystem();
+
+    this.enemySheet = new Image();
+    this.enemySheet.src = 'layers/enemy.png';
+    this.enemyFrameCount = 6;
+
+    this.enemyHitSheet = new Image();
+    this.enemyHitSheet.src = 'layers/enemy-hit.png';
+    this.enemyHitFrameCount = 4;
+
+    this.enemyDeadSheet = new Image();
+    this.enemyDeadSheet.src = 'layers/enemy-dead.png';
+    this.enemyDeadFrameCount = 6;
+
+    this.ghostSheet = new Image();
+    this.ghostSheet.src = 'layers/enemy_ghost_3.png';
+    this.ghostFrameCount = 6;
+
+    this.resizeCanvas();
+    this.raf = requestAnimationFrame(this.tick);
+  }
+
+  resizeCanvas() {
+    const canvas = this.canvasRef.current, stage = this.stageRef.current;
+    if (!canvas || !stage) return;
+    // Mierzymy scenę, nie okno: CSS-owa wysokość sceny (100dvh) i
+    // window.innerHeight rozjeżdżają się przy chowaniu paska adresu oraz
+    // wejściu w pełny ekran, co niejednorodnie rozciągało canvas.
+    const rect = stage.getBoundingClientRect();
+    const w = Math.round(rect.width), h = Math.round(rect.height);
+    if (!w || !h) return;
+    this.viewW = w;
+    this.viewH = h;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (this.fx) this.fx.resize(w, h);
+    this.rescalePlayerBounds();
+  }
+
+  // Granice ruchu policzone w startGame przestają pasować po obrocie ekranu —
+  // przeliczamy je i wciągamy gracza z powrotem w kadr.
+  rescalePlayerBounds() {
+    const p = this.player;
+    if (!p) return;
+    p.minX = this.viewW * 0.08;
+    p.maxX = this.viewW * 0.42;
+    p.x = Math.min(Math.max(p.x, p.minX), p.maxX);
+  }
+
+  startGame = () => {
+    this.enterImmersive();
+    if (!this.viewW || !this.viewH) this.resizeCanvas();
+    const w = this.viewW, h = this.viewH;
+    this.player = {
+      x: w * 0.22, y: 0, vy: 0, onGround: true,
+      minX: w * 0.08, maxX: w * 0.42,
+      facingRight: true, invuln: 0,
+      // squash & stretch — sprężynują z powrotem do 1 w każdej klatce
+      sx: 1, sy: 1,
+      // Gwiazdki ninja: jeden rzut na pobyt w powietrzu — reset przy lądowaniu
+      // lub przy pokonaniu wroga (patrz onStompKill/onStarKill), co pozwala
+      // łączyć akcje w serie. throwTimer trzyma pozę rzutu przez chwilę.
+      starsAvailable: true, throwTimer: 0, facing: 1,
+    };
+    // Pula pocisków o stałym rozmiarze — gwiazdki lecą seriami po 3, a pętla
+    // gry nie może alokować (ta sama zasada co pula cząsteczek w FXSystem).
+    this.stars = [];
+    for (let i = 0; i < STAR_POOL; i++) {
+      this.stars.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, rot: 0, life: 0, speed: 0 });
+    }
+    this.enemies = [];
+    this.gameSpeed = 260;
+    this.spawnTimer = 1.4;
+    this.ghostSpawnTimer = 3;
+    this.elapsedPlaying = 0;
+    this.dustTimer = 0;
+    this.trail = [];          // poświata za graczem w powietrzu
+    this.trailTimer = 0;
+    this.comboTimer = 0;      // okno czasowe na podtrzymanie serii
+    this.layers.forEach(l => l.scrollX = 0);
+    if (this.animator) this.animator.reset('idle');
+    if (this.fx) this.fx.reset();
+    this.setState({ gameState: 'playing', lives: 3, score: 0, distance: 0, kills: 0, combo: 0, bestCombo: 1, photoMode: false });
+    this.audio.play('gameStart');
+  };
+
+  // Tryb foto: pauzuje świat gry i chowa HUD — czysty kadr do zrzutów
+  // i nagrań. Wejście: przycisk 📷 lub klawisz P; wyjście: dotknięcie
+  // ekranu, kliknięcie albo ponowne P.
+  togglePhotoMode = () => {
+    const s = this.state.gameState;
+    if (s !== 'playing' && s !== 'gameover') return;
+    this.keys.left = false;
+    this.keys.right = false;
+    this.setState(st => ({ photoMode: !st.photoMode }));
+  };
+
+  // stopPropagation: dotknięcie przycisku 📷 nie może uruchomić biegu
+  // (rodzic-scena nasłuchuje dotyku całych połówek ekranu). Przełącza
+  // touchend; emulowany click, który przeglądarka wysyła po dotyku,
+  // jest deduplikowany po czasie — bez preventDefault, bo listenery
+  // dotykowe Reacta są pasywne.
+  onPhotoClick = (e) => {
+    e.stopPropagation();
+    if (performance.now() - (this.photoTouchAt || 0) < 700) return;
+    this.togglePhotoMode();
+  };
+  onPhotoTouchStart = (e) => { e.stopPropagation(); };
+  // Klik myszką na 📷 nie może uruchomić skoku (scena nasłuchuje mousedown na całej scenie).
+  onPhotoMouseDown = (e) => { e.stopPropagation(); };
+  onPhotoTouchEnd = (e) => {
+    e.stopPropagation();
+    if (e.cancelable) e.preventDefault(); // blokuje emulowany click po dotyku
+    this.photoTouchAt = performance.now();
+    this.togglePhotoMode();
+  };
+
+  onStageClick = () => {
+    if (!this.state.photoMode) return;
+    // Emulowany click po tapnięciu 📷 trafiłby w scenę (przycisk już zniknął)
+    // i od razu wyszedłby z trybu foto — ignorujemy go w krótkim oknie.
+    if (performance.now() - (this.photoTouchAt || 0) < 700) return;
+    this.togglePhotoMode();
+  };
+
+  // Skok myszką (LPM na scenie) — dla graczy desktopowych bez klawiatury pod ręką.
+  // tryJump() sam odrzuca wywołania poza stanem 'playing'/tryb foto/blokadę pionu.
+  onStageMouseDown = (e) => {
+    if (e.button !== 0) return;
+    // Część przeglądarek mobilnych mimo touch-action:none wysyła emulowany
+    // mousedown po dotyku — ignorujemy go w krótkim oknie po realnym dotyku.
+    if (performance.now() - (this.lastTouchAt || 0) < 700) return;
+    this.tryJump();
+  };
+
+  tryJump() {
+    if (this.state.gameState !== 'playing' || !this.player || this.state.photoMode || this.state.portraitBlock) return;
+    if (this.player.onGround) {
+      const p = this.player;
+      p.vy = -900;
+      p.onGround = false;
+      p.sx = 0.8; p.sy = 1.22; // rozciągnięcie przy wybiciu
+      if (this.fx) {
+        const groundY = this.computeGroundY(this.viewW, this.viewH, p.x);
+        this.fx.emitJump(p.x, groundY);
+      }
+      this.audio.play('jump');
+    }
+  }
+
+  // Rzut gwiazdkami ninja: wachlarz shurikenów w kierunku, w którym patrzy
+  // ninja. Jeden rzut na pobyt w powietrzu — starsAvailable wraca dopiero przy
+  // lądowaniu albo po pokonaniu wroga (pozwala na serie: stomp → rzut → stomp).
+  tryThrowStars() {
+    const p = this.player;
+    if (this.state.gameState !== 'playing' || !p || this.state.photoMode || this.state.portraitBlock) return;
+    if (p.onGround || !p.starsAvailable) return;
+    p.starsAvailable = false;
+    p.throwTimer = 0.18;
+    p.sx = 1.18; p.sy = 0.86; // krótkie ścięcie sylwetki — zamach ręką
+    const dir = p.facing;
+    const groundY = this.computeGroundY(this.viewW, this.viewH, p.x);
+    const handX = p.x + dir * 26, handY = groundY + p.y - 78;
+
+    // Wachlarz: środkowa gwiazdka leci prosto, boczne pod kątem — po starcie
+    // każda i tak sama naprowadza się na najbliższego ducha (patrz updateStars).
+    let thrown = 0, slot = 0;
+    for (let i = 0; i < STAR_COUNT; i++) {
+      let s = null;
+      while (slot < STAR_POOL) { if (!this.stars[slot].active) { s = this.stars[slot]; break; } slot++; }
+      if (!s) break; // pula wyczerpana — reszta serii po prostu nie wychodzi
+      slot++;
+      const a = (i - (STAR_COUNT - 1) / 2) * STAR_SPREAD;
+      // Każda gwiazdka leci nieco inaczej szybko: naprowadzanie ściąga je na
+      // wspólny tor, więc przy równych prędkościach zlewałyby się w jeden punkt.
+      // Różnica rozciąga je w czytelną serię lecącą jedna za drugą.
+      s.speed = STAR_SPEED * (0.85 + i * 0.15);
+      s.active = true;
+      s.x = handX; s.y = handY + (i - (STAR_COUNT - 1) / 2) * 10;
+      s.vx = Math.cos(a) * s.speed * dir;
+      s.vy = Math.sin(a) * s.speed;
+      s.rot = Math.random() * Math.PI * 2;
+      s.life = STAR_LIFE;
+      thrown++;
+    }
+
+    this.fx.emitStarThrow(handX, handY, dir);
+    this.fx.addTrauma(0.06);
+    this.audio.play('starThrow', 0.7);
+  }
+
+  onLeftDown = (e) => { if (e.cancelable) e.preventDefault(); this.keys.left = true; };
+  onLeftUp = (e) => { if (e.cancelable) e.preventDefault(); this.keys.left = false; };
+  onRightDown = (e) => { if (e.cancelable) e.preventDefault(); this.keys.right = true; };
+  onRightUp = (e) => { if (e.cancelable) e.preventDefault(); this.keys.right = false; };
+  onJump = (e) => { if (e.cancelable) e.preventDefault(); this.tryJump(); };
+
+  onStageTouchStart = (e) => {
+    this.lastTouchAt = performance.now();
+    if (this.state.photoMode || this.state.portraitBlock) return;
+    const t = e.touches[0];
+    this.swipe = { x: t.clientX, y: t.clientY, t: performance.now(), moved: false };
+    // hold on left/right half of screen to run that direction, same gesture area as swipe-up jump
+    if (t.clientX < this.viewW / 2) this.keys.left = true;
+    else this.keys.right = true;
+  };
+  onStageTouchMove = (e) => {
+    if (!this.swipe) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientY - this.swipe.y) > 10 || Math.abs(t.clientX - this.swipe.x) > 10) this.swipe.moved = true;
+  };
+  onStageTouchEnd = (e) => {
+    // W trybie foto dotknięcie ekranu wraca do gry (klik na iOS/Android
+    // bywa pomijany nad canvasem, więc reagujemy wprost na touchend).
+    if (this.state.photoMode) { this.swipe = null; this.togglePhotoMode(); return; }
+    this.keys.left = false;
+    this.keys.right = false;
+    if (!this.swipe) return;
+    const t = e.changedTouches[0];
+    const dy = t.clientY - this.swipe.y;
+    const dx = t.clientX - this.swipe.x;
+    const dt = performance.now() - this.swipe.t;
+    // swipe up: mostly vertical, upward, fast/short enough to be a flick (not a slow drag)
+    if (dy < -40 && Math.abs(dy) > Math.abs(dx) * 1.2 && dt < 500) {
+      this.tryJump();
+    } else if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2 && dt < 400) {
+      // swipe w bok: rzut gwiazdkami w powietrzu, w kierunku machnięcia
+      if (this.player && !this.player.onGround) {
+        this.player.facing = dx > 0 ? 1 : -1;
+        this.tryThrowStars();
+      }
+    }
+    this.swipe = null;
+  };
+
+  groundHeightAt(sourceX) {
+    const prof = this.groundProfile;
+    if (sourceX <= prof[0].x) return prof[0].h;
+    for (let i = 0; i < prof.length - 1; i++) {
+      const a = prof[i], b = prof[i + 1];
+      if (sourceX <= b.x) {
+        const t = (sourceX - a.x) / (b.x - a.x);
+        return a.h + (b.h - a.h) * t;
+      }
+    }
+    return prof[prof.length - 1].h;
+  }
+
+  computeGroundY(w, h, screenX) {
+    const img = this.groundImg;
+    if (!img) return h * (0.76 - GROUND_LIFT_RATIO);
+    // Ta sama skala i ten sam lift co przy rysowaniu warstwy platform —
+    // gracz i wrogowie muszą stać na powierzchni, którą widać.
+    const lift = h * GROUND_LIFT_RATIO;
+    const scale = layerScale(img, w, h, lift);
+    const drawW = Math.round(img.width * scale);
+    const drawH = Math.round(img.height * scale);
+    const baseY = (h - drawH) / 2 - lift;
+
+    let heightFromBottom = 203;
+    if (screenX !== undefined && this.groundLayer) {
+      let x0 = this.groundLayer.scrollX % drawW;
+      if (x0 > 0) x0 -= drawW;
+      let localX = (screenX - x0) % drawW;
+      if (localX < 0) localX += drawW;
+      const srcX = localX / scale;
+      heightFromBottom = this.groundHeightAt(srcX);
+    }
+    return baseY + (img.height - heightFromBottom) * scale;
+  }
+
+  spawnEnemy(w, groundY) {
+    this.enemies.push({ type: 'ground', x: w + 60, y: groundY, w: 46, h: 58, alive: true, dead: false, deadTimer: 0, hit: false, hitTimer: 0, bob: Math.random() * Math.PI * 2, frame: 0, frameTimer: 0 });
+  }
+
+  spawnGhost(w, groundY) {
+    const flyHeight = 90 + Math.random() * 70;
+    this.enemies.push({ type: 'ghost', x: w + 60, y: groundY - flyHeight, w: 50, h: 60, alive: true, dead: false, deadTimer: 0, hit: false, hitTimer: 0, bob: Math.random() * Math.PI * 2, wispTimer: 0, frame: 0, frameTimer: 0 });
+  }
+
+  // Pokonanie wroga: punkty rosną z serią, świat dostaje "cios" (hit-stop,
+  // shake, iskry, fala uderzeniowa, popup).
+  onStompKill(en, enY) {
+    const p = this.player;
+    en.alive = false; en.dead = true; en.deadTimer = 0;
+    p.vy = -560;
+    p.sx = 0.85; p.sy = 1.15;
+    p.starsAvailable = true; // po stompie znów można rzucić gwiazdkami (seria)
+
+    this.comboTimer = 2.0;
+    const combo = this.state.combo + 1;
+    const points = 10 * combo;
+
+    this.fx.emitStompBurst(en.x, enY - en.h * 0.5);
+    this.fx.addTrauma(0.28);
+    this.fx.addHitStop(0.06);
+    this.fx.flash(0.06, '255, 220, 140');
+    this.fx.spawnPopup(en.x, enY - en.h - 24, '+' + points, '#ffd670', 24);
+    this.audio.play('stompKill');
+    this.audio.play('scoreTick', 0.6);
+    if (combo >= 2) {
+      this.fx.spawnPopup(en.x, enY - en.h - 56, 'SERIA x' + combo + '!', '#ff9d3b', 20 + Math.min(10, combo * 2));
+      this.fx.addTrauma(0.06 * Math.min(4, combo));
+      this.audio.play('combo');
+    }
+
+    this.setState(s => {
+      if (combo > s.bestCombo) this.audio.play('bestCombo');
+      return {
+        score: s.score + points,
+        kills: s.kills + 1,
+        combo,
+        bestCombo: Math.max(s.bestCombo, combo),
+      };
+    });
+  }
+
+  // Trafienie ducha gwiazdką. Duchy latają poza zasięgiem skoku, więc to
+  // jedyny sposób na ich zdjęcie — i dlatego punktuje wyżej niż stomp.
+  onStarKill(en, enY) {
+    const p = this.player;
+    en.alive = false; en.dead = true; en.deadTimer = 0;
+    p.starsAvailable = true; // reset — pozwala na serię (stomp → rzut → stomp)
+
+    this.comboTimer = 2.0;
+    const combo = this.state.combo + 1;
+    const points = 15 * combo; // trafienie w locie daje więcej niż stomp
+
+    this.fx.emitStarBurst(en.x, enY - en.h * 0.5);
+    this.fx.addTrauma(0.22);
+    this.fx.addHitStop(0.04);
+    this.fx.flash(0.04, '140, 200, 255'); // lodowoniebieska
+    this.fx.spawnPopup(en.x, enY - en.h - 24, '+' + points, '#9fd8ff', 24);
+    this.audio.play('stompKill'); // reużyj istniejącego SFX
+    this.audio.play('scoreTick', 0.6);
+
+    if (combo >= 2) {
+      this.fx.spawnPopup(en.x, enY - en.h - 56, 'SERIA x' + combo + '!', '#64b5f6', 20 + Math.min(10, combo * 2));
+      this.fx.addTrauma(0.05 * Math.min(4, combo));
+      this.audio.play('combo');
+    }
+    if (combo >= 4) this.fx.addSlowMo(0.15, 0.4); // micro slow-mo przy dłuższym chainie
+
+    this.setState(s => {
+      if (combo > s.bestCombo) this.audio.play('bestCombo');
+      return { score: s.score + points, kills: s.kills + 1, combo, bestCombo: Math.max(s.bestCombo, combo) };
+    });
+  }
+
+  // Lot gwiazdek: delikatne naprowadzanie na najbliższego ducha, ślad i
+  // kolizje. Naprowadzanie jest celowo ograniczone kątem skrętu (STAR_TURN) —
+  // gwiazdka dociąga do celu, w który gracz mniej więcej wycelował, ale nie
+  // zawraca za plecy, więc rzut nadal wymaga wyczucia.
+  updateStars(dt) {
+    for (const s of this.stars) {
+      if (!s.active) continue;
+      s.life -= dt;
+      if (s.life <= 0) { s.active = false; continue; }
+
+      // Cel: najbliższy żywy duch. Ground'y pomijamy — gwiazdki są odpowiedzią
+      // na latających wrogów, po naziemnych dalej się skacze.
+      let tx = 0, ty = 0, bestD = Infinity;
+      for (const en of this.enemies) {
+        if (!en.alive || en.dead || en.type !== 'ghost') continue;
+        const enY = en.y + Math.sin(en.bob) * 12;
+        const cx = en.x, cy = enY - en.h * 0.5;
+        const d = (cx - s.x) * (cx - s.x) + (cy - s.y) * (cy - s.y);
+        if (d < bestD) { bestD = d; tx = cx; ty = cy; }
+      }
+
+      if (bestD < Infinity) {
+        // Obrót wektora prędkości w stronę celu, nie więcej niż STAR_TURN*dt.
+        const ang = Math.atan2(s.vy, s.vx);
+        let diff = Math.atan2(ty - s.y, tx - s.x) - ang;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        const step = Math.min(Math.abs(diff), STAR_TURN * dt) * Math.sign(diff);
+        const na = ang + step;
+        s.vx = Math.cos(na) * s.speed;
+        s.vy = Math.sin(na) * s.speed;
+      }
+
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.rot += STAR_SPIN * dt;
+      this.fx.emitStarTrail(s.x, s.y, s.vx, s.vy);
+
+      if (s.x < -60 || s.x > this.viewW + 60 || s.y < -60 || s.y > this.viewH + 60) { s.active = false; continue; }
+
+      for (const en of this.enemies) {
+        if (!en.alive || en.dead || en.type !== 'ghost') continue;
+        const enY = en.y + Math.sin(en.bob) * 12;
+        // Koło (gwiazdka) vs prostokąt (duch) — najbliższy punkt boxa.
+        const bx = Math.max(en.x - en.w / 2, Math.min(s.x, en.x + en.w / 2));
+        const by = Math.max(enY - en.h, Math.min(s.y, enY));
+        const dx = s.x - bx, dy = s.y - by;
+        if (dx * dx + dy * dy <= STAR_RADIUS * STAR_RADIUS) {
+          s.active = false;
+          this.onStarKill(en, enY);
+          break;
+        }
+      }
+    }
+  }
+
+  // Gwiazdki rysujemy nad wrogami i graczem — lecą "przed" sceną.
+  drawStars(ctx) {
+    if (!this.stars) return;
+    for (const s of this.stars) {
+      if (!s.active) continue;
+      // Ostatnie chwile lotu wygaszamy, żeby gwiazdka nie znikała skokowo.
+      const fade = Math.min(1, s.life / 0.18);
+      ctx.save();
+      ctx.globalAlpha = fade;
+      this.fx.drawShuriken(ctx, s.x, s.y, STAR_SIZE, s.rot);
+      ctx.restore();
+    }
+  }
+
+  // Trafienie gracza: czerwony rozbłysk, mocny shake, hit-stop; przy utracie
+  // ostatniego życia — slow-motion i przejście do ekranu końca. Wróg nie
+  // ginie — odgrywa animację trafienia i wraca do normalnej formy, biegnąc dalej.
+  onPlayerHit(en, enY) {
+    const p = this.player;
+    en.hit = true; en.hitTimer = 0;
+    p.invuln = 1.1;
+    this.comboTimer = 0;
+
+    this.fx.emitHitSparks(p.x, enY - en.h * 0.5);
+    this.fx.addTrauma(0.55);
+    this.fx.addHitStop(0.11);
+    this.fx.flash(0.55, '231, 76, 60');
+    this.audio.play(en.type === 'ghost' ? 'ghostHit' : 'playerHit');
+
+    this.setState(s => {
+      const lives = s.lives - 1;
+      if (lives <= 0) {
+        this.fx.addSlowMo(1.1, 0.3);
+        this.fx.addTrauma(0.4);
+        // W powietrzu: dokańczamy upadek (grawitacja leci dalej w tick()),
+        // animacja śmierci startuje dopiero po wylądowaniu na ziemi.
+        if (p.onGround) this.animator.play('death', { force: true });
+        else p.pendingDeath = true;
+        this.audio.play('gameOver');
+        return { lives, gameState: 'gameover', combo: 0 };
+      }
+      this.animator.play('hit', { force: true });
+      return { lives, gameState: 'playing', combo: 0 };
+    });
+  }
+
+  tick = (now) => {
+    const canvas = this.canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = this.viewW, h = this.viewH;
+    const rawDt = Math.min((now - this.lastTime) / 1000, 0.05);
+    this.lastTime = now;
+    // FX skaluje czas świata (hit-stop / slow-motion) i liczy shake kamery.
+    // Tryb foto zamraża świat całkowicie (dt = 0) — pętla dalej rysuje ten
+    // sam kadr, a ambient (promienie, świetliki) subtelnie żyje na zegarze fx.
+    // Prośba o obrót telefonu zamraża tak samo: gracz nie traci życia,
+    // patrząc na nakładkę.
+    const photo = this.state.photoMode;
+    const frozen = photo || this.state.portraitBlock;
+    const worldDt = this.fx.tick(rawDt);
+    const dt = frozen ? 0 : worldDt;
+    const groundY = this.computeGroundY(w, h, this.player ? this.player.x : undefined);
+    const playing = this.state.gameState === 'playing';
+    const gameOver = this.state.gameState === 'gameover';
+
+    if (playing && !frozen && this.player) {
+      this.elapsedPlaying += dt;
+      this.gameSpeed = Math.min(260 + this.elapsedPlaying * 6, 620);
+      const spawnInterval = Math.max(1.5 - this.elapsedPlaying * 0.02, 0.55);
+
+      const p = this.player;
+      if (this.keys.left) { p.x -= 340 * dt; p.facing = -1; }
+      if (this.keys.right) { p.x += 340 * dt; p.facing = 1; }
+      p.x = Math.max(p.minX, Math.min(p.maxX, p.x));
+
+      const wasAirborne = !p.onGround;
+      const fallSpeed = p.vy;
+      p.vy += 2200 * dt;
+      p.y += p.vy * dt;
+      if (p.y >= 0) { p.y = 0; p.vy = 0; p.onGround = true; }
+      if (p.invuln > 0) p.invuln -= dt;
+
+      if (p.throwTimer > 0) p.throwTimer -= dt;
+
+      // Lądowanie: kurz + zgniecenie sylwetki zależne od siły upadku.
+      if (wasAirborne && p.onGround) {
+        const impact = Math.min(1, Math.max(0, fallSpeed) / 1300);
+        this.fx.emitLanding(p.x, groundY, impact);
+        p.sx = 1 + 0.3 * impact; p.sy = 1 - 0.28 * impact;
+        if (impact > 0.5) this.fx.addTrauma(0.12 * impact);
+        p.starsAvailable = true; // lądowanie odnawia rzut
+        this.trail.length = 0;
+      }
+
+      // Sprężyna squash & stretch — powrót do proporcji 1:1.
+      p.sx += (1 - p.sx) * Math.min(1, dt * 12);
+      p.sy += (1 - p.sy) * Math.min(1, dt * 12);
+
+      // Kurz spod stóp podczas biegu po ziemi.
+      if (p.onGround && (this.keys.left || this.keys.right)) {
+        this.dustTimer -= dt;
+        if (this.dustTimer <= 0) {
+          this.dustTimer = 0.09;
+          this.fx.emitRunDust(p.x, groundY, this.keys.right ? 1 : -1);
+        }
+      }
+
+      // Poświata w powietrzu — zapamiętujemy ostatnie pozy do narysowania echa.
+      if (!p.onGround) {
+        this.trailTimer -= dt;
+        if (this.trailTimer <= 0 && this.animator && this.animator.currentSheet) {
+          this.trailTimer = 0.045;
+          const f = this.animator.getCurrentFrame();
+          this.trail.push({ x: p.x, y: p.y, f, life: 0.22 });
+          if (this.trail.length > 4) this.trail.shift();
+        }
+      }
+
+      // Okno serii — po 2 s bez trafienia licznik wraca do zera.
+      if (this.comboTimer > 0) {
+        this.comboTimer -= dt;
+        if (this.comboTimer <= 0 && this.state.combo > 0) this.setState({ combo: 0 });
+      }
+
+      if (p.invuln <= 0.9) {
+        if (!p.onGround) this.animator.play('jump');
+        else if (this.keys.left) { this.animator.play('move-left'); }
+        else this.animator.play('move-right');
+      }
+      this.animator.update(dt * 1000);
+
+      this.spawnTimer -= dt;
+      if (this.spawnTimer <= 0) { this.spawnEnemy(w, groundY); this.spawnTimer = spawnInterval + Math.random() * 0.4; }
+
+      this.ghostSpawnTimer -= dt;
+      const ghostInterval = Math.max(3.2 - this.elapsedPlaying * 0.03, 1.4);
+      if (this.ghostSpawnTimer <= 0) { this.spawnGhost(w, groundY); this.ghostSpawnTimer = ghostInterval + Math.random() * 0.6; }
+
+      const enemySpeed = this.gameSpeed + 160;
+      const pw = 70, ph = 130;
+      const pBox = { x: p.x - pw / 2 + 14, y: groundY + p.y - ph + 16, w: pw - 28, h: ph - 16 };
+
+      this.enemies.forEach(en => {
+        if (en.dead) { en.deadTimer += dt; return; }
+        en.x -= (en.type === 'ghost' ? enemySpeed * 0.8 : enemySpeed) * dt;
+        en.bob += dt * (en.type === 'ghost' ? 4 : 10);
+        if (en.type === 'ground') {
+          en.frameTimer += dt;
+          if (en.frameTimer > 0.08) { en.frameTimer = 0; en.frame = (en.frame + 1) % this.enemyFrameCount; }
+        }
+        if (en.type === 'ghost') {
+          en.frameTimer += dt;
+          if (en.frameTimer > 0.1) { en.frameTimer = 0; en.frame = (en.frame + 1) % this.ghostFrameCount; }
+        }
+        if (en.hit) {
+          en.hitTimer += dt;
+          if (en.hitTimer > 0.4) en.hit = false;
+        }
+        const enY = en.type === 'ghost' ? en.y + Math.sin(en.bob) * 12 : en.y;
+        // Duchy zostawiają za sobą zimną smużkę.
+        if (en.type === 'ghost') {
+          en.wispTimer -= dt;
+          if (en.wispTimer <= 0) {
+            en.wispTimer = 0.07;
+            this.fx.emitWisp(en.x + en.w * 0.4, enY - en.h * 0.5);
+          }
+        }
+        const eBox = { x: en.x - en.w / 2, y: enY - en.h, w: en.w, h: en.h };
+        const overlap = pBox.x < eBox.x + eBox.w && pBox.x + pBox.w > eBox.x && pBox.y < eBox.y + eBox.h && pBox.y + pBox.h > eBox.y;
+        if (overlap && en.alive) {
+          const fallingOnTop = en.type === 'ground' && p.vy > 0 && (pBox.y + pBox.h) - eBox.y < eBox.h * 0.6;
+          if (fallingOnTop) this.onStompKill(en, enY);
+          else if (p.invuln <= 0) this.onPlayerHit(en, enY);
+        }
+      });
+
+      // Gwiazdki po ruchu wrogów — trafiają w pozycje z tej samej klatki.
+      this.updateStars(dt);
+
+      this.enemies = this.enemies.filter(en => en.x > -100 && !(en.dead && en.deadTimer > 0.4));
+
+      const distDelta = this.gameSpeed * dt;
+      this.setState(s => ({ score: s.score + distDelta * 0.02, distance: s.distance + distDelta * 0.02 }));
+    } else if (gameOver && this.player) {
+      const p = this.player;
+      if (p.pendingDeath) {
+        // Gracz tracił ostatnie życie w powietrzu — dokańczamy spadanie,
+        // animacja śmierci odpala się dopiero po dotknięciu ziemi.
+        p.vy += 2200 * dt;
+        p.y += p.vy * dt;
+        if (p.y >= 0) {
+          p.y = 0; p.vy = 0; p.onGround = true;
+          p.pendingDeath = false;
+          this.animator.play('death', { force: true });
+        }
+      }
+      if (this.animator && !this.animator.finished) {
+        this.animator.update(dt * 1000);
+      }
+    }
+
+    // Poświata w powietrzu musi dogasać niezależnie od stanu gry — inaczej
+    // ostatnie klatki echa zostają zamrożone w powietrzu, gdy player spada
+    // do game over (widać "dwóch graczy" naraz).
+    for (let i = this.trail.length - 1; i >= 0; i--) {
+      this.trail[i].life -= dt;
+      if (this.trail[i].life <= 0) this.trail.splice(i, 1);
+    }
+
+    // Prędkość tła płynnie dogania cel — przy game over hamuje z pełnego
+    // rozpędu do zera (pełny bezruch) zamiast ciąć ją w jednej klatce;
+    // na ekranie startowym zostaje wolny ambient.
+    const targetBgSpeed = playing ? this.gameSpeed : (gameOver ? 0 : 40);
+    this.bgSpeed += (targetBgSpeed - this.bgSpeed) * (1 - Math.exp(-dt / 0.9));
+
+    // Efekty żyją zawsze (także na ekranie startowym — ambient buduje klimat).
+    this.fx.update(dt, { w, h, gameSpeed: this.bgSpeed, groundY, playing });
+
+    ctx.clearRect(0, 0, w, h);
+
+    // ---- Świat gry: wszystko w transformacji shake kamery ----
+    ctx.save();
+    ctx.translate(this.fx.shakeX, this.fx.shakeY);
+
+    const bgScrollMult = this.bgSpeed;
+    this.layers.forEach((layer) => {
+      const img = layer.img;
+      const lift = layer.liftsWithGround ? h * GROUND_LIFT_RATIO : 0;
+      const scale = layerScale(img, w, h, lift);
+      const drawW = Math.round(img.width * scale);
+      const drawH = Math.round(img.height * scale);
+      const vBias = layer.mult === 0.05 ? drawH * 0.12 : 0;
+      const baseY = (h - drawH) / 2 - vBias - lift;
+
+      ctx.globalCompositeOperation = layer.blend;
+      layer.scrollX -= layer.mult * bgScrollMult * dt;
+      let x = layer.scrollX % drawW;
+      if (x > 0) x -= drawW;
+      x = Math.round(x);
+      const baseIndex = Math.round((layer.scrollX - x) / drawW);
+      let n = 0;
+      const isForeground = layer.mult > 1.0;
+      if (!isForeground) {
+        for (let px = x; px < w; px += drawW) {
+          const tileIndex = baseIndex + n;
+          const mirrored = layer.mirrorTile && (((tileIndex % 2) + 2) % 2 === 1);
+          ctx.save();
+          if (mirrored) { ctx.translate(px + drawW, baseY); ctx.scale(-1, 1); }
+          else { ctx.translate(px, baseY); }
+          ctx.drawImage(img, 0, 0, drawW, drawH);
+          ctx.restore();
+          n++;
+        }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    });
+
+    // Ambient za postaciami: promienie światła, świetliki.
+    this.fx.drawAmbient(ctx, groundY);
+
+    if ((playing || gameOver) && this.player) {
+      this.enemies.forEach(en => this.drawEnemy(ctx, en, groundY));
+      this.drawTrail(ctx, groundY);
+      this.drawPlayer(ctx, this.player, groundY);
+      this.drawStars(ctx);
+    }
+
+    // Cząsteczki, fale uderzeniowe i popupy — nad postaciami.
+    this.fx.drawEffects(ctx);
+
+    // Pierwszy plan (gałęzie, ramka) przykrywa efekty — buduje głębię.
+    this.layers.forEach((layer) => {
+      if (layer.mult <= 1.0) return;
+      const img = layer.img;
+      // Pierwszy plan nigdy nie jedzie z gruntem — kadruje ekran, nie scenę.
+      const scale = layerScale(img, w, h, 0);
+      const drawW = Math.round(img.width * scale);
+      const drawH = Math.round(img.height * scale);
+      const baseY = (h - drawH) / 2;
+      let x = layer.scrollX % drawW;
+      if (x > 0) x -= drawW;
+      for (let px = x; px < w; px += drawW) ctx.drawImage(img, px, baseY, drawW, drawH);
+    });
+
+    ctx.restore();
+    // ---- Nakładki pełnoekranowe (bez shake): mgła, grading, winieta, flash ----
+    this.fx.drawOverlay(ctx, groundY);
+
+    this.raf = requestAnimationFrame(this.tick);
+  };
+
+  drawEnemy(ctx, en, groundY) {
+    if (en.type === 'ghost') { this.drawGhost(ctx, en); return; }
+    if (en.dead) {
+      // Naskoczenie z góry: pełna animacja zgonu, wróg znika dopiero po jej
+      // zakończeniu (bez przenikania w trakcie odtwarzania klatek).
+      if (!this.enemyDeadSheet || !this.enemyDeadSheet.complete || !this.enemyDeadSheet.naturalWidth) return;
+      const fw = this.enemyDeadSheet.naturalWidth / this.enemyDeadFrameCount;
+      const fh = this.enemyDeadSheet.naturalHeight;
+      const displayH = 84, displayW = displayH * (fw / fh);
+      const x = en.x, yBase = en.y + displayH * 0.22 + 15;
+      const frame = Math.min(this.enemyDeadFrameCount - 1, Math.floor((en.deadTimer / 0.4) * this.enemyDeadFrameCount));
+      ctx.drawImage(this.enemyDeadSheet, frame * fw, 0, fw, fh, x - displayW / 2, yBase - displayH, displayW, displayH);
+      return;
+    }
+    if (en.hit) {
+      // Zderzenie z boku: wróg odgrywa animację trafienia, po czym wraca do
+      // normalnej formy i biegnie dalej (nie ginie).
+      if (!this.enemyHitSheet || !this.enemyHitSheet.complete || !this.enemyHitSheet.naturalWidth) return;
+      const fw = this.enemyHitSheet.naturalWidth / this.enemyHitFrameCount;
+      const fh = this.enemyHitSheet.naturalHeight;
+      const bob = Math.sin(en.bob) * 3;
+      const displayH = 84, displayW = displayH * (fw / fh);
+      const x = en.x, yBase = en.y + bob + displayH * 0.22 + 15;
+      this.fx.drawShadow(ctx, x, en.y + 8, displayW * 0.34, 0);
+      const frame = Math.min(this.enemyHitFrameCount - 1, Math.floor((en.hitTimer / 0.4) * this.enemyHitFrameCount));
+      ctx.drawImage(this.enemyHitSheet, frame * fw, 0, fw, fh, x - displayW / 2, yBase - displayH, displayW, displayH);
+      return;
+    }
+    if (!this.enemySheet || !this.enemySheet.complete || !this.enemySheet.naturalWidth) return;
+    const fw = this.enemySheet.naturalWidth / this.enemyFrameCount;
+    const fh = this.enemySheet.naturalHeight;
+    const bob = Math.sin(en.bob) * 3;
+    const displayH = 84, displayW = displayH * (fw / fh);
+    const x = en.x, yBase = en.y + bob + displayH * 0.22 + 15;
+    this.fx.drawShadow(ctx, x, en.y + 8, displayW * 0.34, 0);
+    ctx.drawImage(this.enemySheet, en.frame * fw, 0, fw, fh, x - displayW / 2, yBase - displayH, displayW, displayH);
+  }
+
+  drawGhost(ctx, en) {
+    const y = en.y + Math.sin(en.bob) * 12;
+    const x = en.x;
+    const h = en.h;
+    // Zimna poświata pod duchem — od razu czyta się jako "inny" typ wroga.
+    this.fx.drawGlow(ctx, x, y - h * 0.4, en.w * 2.6, en.dead ? Math.max(0, 1 - en.deadTimer / 0.4) * 0.5 : 0.5);
+    if (!this.ghostSheet || !this.ghostSheet.complete || !this.ghostSheet.naturalWidth) return;
+    const fw = this.ghostSheet.naturalWidth / this.ghostFrameCount;
+    const fh = this.ghostSheet.naturalHeight;
+    const displayH = 78, displayW = displayH * (fw / fh);
+    ctx.save();
+    if (en.dead) ctx.globalAlpha = Math.max(0, 1 - en.deadTimer / 0.4);
+    ctx.drawImage(this.ghostSheet, en.frame * fw, 0, fw, fh, x - displayW / 2, y - displayH, displayW, displayH);
+    ctx.restore();
+  }
+
+  // Echo sylwetki gracza podczas skoku — im starsze, tym bledsze.
+  drawTrail(ctx, groundY) {
+    if (!this.trail || !this.trail.length) return;
+    const displayH = 170;
+    for (const t of this.trail) {
+      const f = t.f;
+      const displayW = displayH * (f.sWidth / f.sHeight);
+      const drawX = t.x, drawY = groundY + t.y + displayH * 0.22;
+      ctx.save();
+      ctx.globalAlpha = (t.life / 0.22) * 0.22;
+      ctx.translate(drawX, drawY);
+      ctx.drawImage(f.sheet, f.sx, f.sy, f.sWidth, f.sHeight, -displayW / 2, -displayH, displayW, displayH);
+      ctx.restore();
+    }
+  }
+
+  drawPlayer(ctx, p, groundY) {
+    if (!this.animator || !this.animator.currentSheet || !this.animator.currentSheet.complete) return;
+    const f = this.animator.getCurrentFrame();
+    const displayH = 170, displayW = displayH * (f.sWidth / f.sHeight);
+    const drawX = p.x, drawY = groundY + p.y + displayH * 0.22;
+    this.fx.drawShadow(ctx, p.x, groundY, displayW * 0.28, p.y);
+    ctx.save();
+    // invuln przestaje odliczać poza stanem 'playing' (patrz tick()) — bez tej
+    // blokady player zostawałby na stałe przygaszony po śmierci.
+    if (this.state.gameState === 'playing' && p.invuln > 0 && Math.floor(p.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.4;
+    ctx.translate(drawX, drawY);
+    // Squash & stretch skaluje sylwetkę wokół punktu przy stopach.
+    ctx.scale((p.facingRight ? 1 : -1) * (p.sx || 1), p.sy || 1);
+    ctx.drawImage(f.sheet, f.sx, f.sy, f.sWidth, f.sHeight, -displayW / 2, -displayH, displayW, displayH);
+    if (p.throwTimer > 0) {
+      // Zimny rozbłysk sylwetki tuż po rzucie — czytelne potwierdzenie akcji,
+      // gasnące razem z throwTimer.
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.35 * (p.throwTimer / 0.18);
+      ctx.drawImage(f.sheet, f.sx, f.sy, f.sWidth, f.sHeight, -displayW / 2, -displayH, displayW, displayH);
+    }
+    ctx.restore();
+  }
+
+  renderVals() {
+    const s = this.state;
+    const hearts = [0, 1, 2].map(i => ({
+      opacity: i < s.lives ? 1 : 0.3,
+      filter: i < s.lives ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))' : 'grayscale(1) brightness(0.6)',
+      scale: i < s.lives ? 1 : 0.82,
+    }));
+    return {
+      canvasRef: this.canvasRef,
+      stageRef: this.stageRef,
+      hearts,
+      isReady: s.gameState === 'ready',
+      isPlaying: s.gameState === 'playing',
+      isGameOver: s.gameState === 'gameover',
+      isPhoto: s.photoMode,
+      portraitBlockVisible: s.portraitBlock,
+      hudVisible: !s.photoMode && s.gameState !== 'ready',
+      gameOverVisible: s.gameState === 'gameover' && !s.photoMode,
+      photoBtnVisible: (s.gameState === 'playing' || s.gameState === 'gameover') && !s.photoMode,
+      scoreLabel: Math.floor(s.score).toString(),
+      distanceLabel: Math.floor(s.distance).toString(),
+      kills: s.kills,
+      comboLabel: s.combo >= 2 ? 'SERIA x' + s.combo : '',
+      bestCombo: s.bestCombo,
+      startGame: this.startGame,
+      onLeftDown: this.onLeftDown, onLeftUp: this.onLeftUp,
+      onRightDown: this.onRightDown, onRightUp: this.onRightUp,
+      onJump: this.onJump,
+      onPhotoClick: this.onPhotoClick,
+      onPhotoMouseDown: this.onPhotoMouseDown,
+      onPhotoTouchStart: this.onPhotoTouchStart,
+      onPhotoTouchEnd: this.onPhotoTouchEnd,
+      onStageClick: this.onStageClick,
+      onStageMouseDown: this.onStageMouseDown,
+      onStageTouchStart: this.onStageTouchStart,
+      onStageTouchMove: this.onStageTouchMove,
+      onStageTouchEnd: this.onStageTouchEnd,
+    };
+  }
+}
+</script>
+</body>
+</html>
