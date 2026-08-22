@@ -1,4 +1,4 @@
-# 🥷 Leśny Ninja: Bieg
+# 🥷 Ninja: Endless Scroller
 
 Endless runner w czystym JavaScripcie (Canvas 2D) — ninja biegnie przez jesienny las,
 skacze wrogom na głowy i buduje serie trafień. Gra powstała jako demo portfolio
