@@ -196,6 +196,9 @@ class AudioManager {
     this.sounds = {};
     const files = {
       jump: 'sfx/jump.mp3',
+      // Nazwa pliku zawiera "#" — bez zakodowania na %23 przeglądarka odcina
+      // wszystko po nim jako fragment URL-a i dźwięk nigdy się nie ładuje.
+      starThrow: 'sfx/Sharp_quick_throwing_%234-1787377360114.mp3',
       stompKill: 'sfx/stomp-kill.mp3',
       scoreTick: 'sfx/score-tick.mp3',
       playerHit: 'sfx/player-hit.mp3',
@@ -560,7 +563,7 @@ class Component extends DCLogic {
 
     this.fx.emitStarThrow(handX, handY, dir);
     this.fx.addTrauma(0.06);
-    this.audio.play('jump', 0.45); // placeholder — brak dedykowanego swoosh w sfx/
+    this.audio.play('starThrow', 0.7);
   }
 
   onLeftDown = (e) => { if (e.cancelable) e.preventDefault(); this.keys.left = true; };
