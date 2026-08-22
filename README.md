@@ -1,8 +1,6 @@
 # 🥷 Ninja: Endless Scroller
 
-Endless runner w czystym JavaScripcie (Canvas 2D) — ninja biegnie przez jesienny las,
-skacze wrogom na głowy i buduje serie trafień. Gra powstała jako demo portfolio
-z naciskiem na **efekty wizualne** i **stałe 60 fps**.
+Endless runner w czystym JavaScripcie (Canvas 2D)
 
 **▶ Zagraj:** https://anthcode.github.io/JSNinja/
 
