@@ -59,7 +59,7 @@ przez `cloneNode`, więc mogą się nakładać (np. seria stompów jedna po drug
 | Start gry | `game-start.mp3` |
 | Skok | `jump.mp3` |
 | Pokonanie wroga (stomp) | `stomp-kill.mp3` + `score-tick.mp3` |
-| Rzut gwiazdkami | `Sharp_quick_throwing_#4-1787377360114.mp3` |
+| Rzut gwiazdkami | `starThrow.mp3` |
 | Trafienie ducha gwiazdką | `stomp-kill.mp3` + `score-tick.mp3` |
 | Seria trafień (≥2) | `combo.mp3` |
 | Nowy rekord serii | `best-combo.mp3` |

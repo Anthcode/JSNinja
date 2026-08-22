@@ -130,8 +130,7 @@ trzymaj **referencję** do wroga (`window.__ghost = {...}; g.enemies.push(...)`)
 
 ### Pliki sfx z `#` w nazwie trzeba enkodować w `AudioManager`
 
-Assety audio bywają nazwane surowo, tak jak wyszły z generatora (np.
-`Sharp_quick_throwing_#4-….mp3`). `#` w URL-u zaczyna fragment — bez zamiany
+Assety audio bywają nazwane surowo, tak jak wyszły z generatora. `#` w URL-u zaczyna fragment — bez zamiany
 na `%23` przeglądarka odcina resztę ścieżki i plik dostaje 404 **po cichu**:
 `AudioManager.play()` łyka odrzucenie `play()` (`node.play().catch(() => {})`,
 patrz komentarz przy tej linii — to celowe, dla przeglądarek blokujących audio
