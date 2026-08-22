@@ -4,6 +4,10 @@ Endless runner w czystym JavaScripcie (Canvas 2D)
 
 **▶ Zagraj:** https://anthcode.github.io/JSNinja/
 
+|  |  |
+|---|---|
+| ![Ekran startowy](docs/screenshots/start-screen.jpg) | ![Rzut gwiazdkami ninja](docs/screenshots/gwiazdki-rzut.jpg) |
+
 ## Sterowanie
 
 | Akcja | Klawiatura | Dotyk |
